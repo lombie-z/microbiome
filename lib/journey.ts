@@ -17,9 +17,6 @@ export const TRACK_FRAMES = 720;
 export const BEATS = {
   /** End of the opening dolly zoom, where the fitted hero hands over to the authored path. */
   open: 80,
-  /** Inside the first cloud: the whiteout peaks here. */
-  cloud: 262,
-  cloudSpread: 26,
   /** Below the clouds the sun comes out and the sky warms. */
   sunIn: 275,
   sunFull: 380,

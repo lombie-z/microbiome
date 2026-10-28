@@ -42,7 +42,7 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
-/** The sky dome, fog, warm sun light and the cloud whiteout, all following the journey. */
+/** The sky dome, fog and warm sun light, all following the journey. */
 export function Sky({ sun }: { sun: Mesh | null }) {
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
@@ -97,10 +97,6 @@ export function Sky({ sun }: { sun: Mesh | null }) {
       m.opacity = bloom;
       sun.visible = bloom > 0.001;
     }
-
-    // Flying through the first cloud: a soft whiteout.
-    const whiteout = document.getElementById('whiteout');
-    if (whiteout) whiteout.style.opacity = String(0.92 * Math.exp(-(((f - BEATS.cloud) / BEATS.cloudSpread) ** 2)));
   });
 
   return (

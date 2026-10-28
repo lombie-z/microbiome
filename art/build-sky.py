@@ -26,10 +26,10 @@ def fresh_object(name, me):
 
 # --- Cloud layer ------------------------------------------------------------------------------------------------------
 
-# (centre, size). The first sits on the camera's way down, so it flies through it; the middle one is pierced by the
-# falls.
+# (centre, size). The first sits just off the camera's way down, so it skims past it (close, never through); the
+# middle one is pierced by the falls.
 CLOUDS = [
-    ((0.5, -2.0, CLOUD_Z), 1.3),
+    ((1.25, -2.45, CLOUD_Z - 0.1), 1.3),
     ((0.0, 0.0, CLOUD_Z - 0.05), 1.0),
     ((-2.0, -0.8, CLOUD_Z + 0.15), 1.5),
     ((-1.0, 1.8, CLOUD_Z - 0.15), 1.4),

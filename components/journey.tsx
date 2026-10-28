@@ -23,8 +23,6 @@ export function Journey() {
           className={cn('aspect-square w-[min(calc(min(640px,100vw)-48px),72svh)] object-contain transition-opacity duration-500', ready && 'opacity-0')}
         />
       </div>
-      {/* Flying through a cloud (driven from components/three/sky.tsx). */}
-      <div id="whiteout" className="pointer-events-none fixed inset-0 z-[3] bg-[#f8f6f3] opacity-0" aria-hidden="true" />
     </>
   );
 }
