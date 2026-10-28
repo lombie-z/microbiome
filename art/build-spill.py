@@ -22,6 +22,21 @@ GAPS = [
     ('B', Vector((-1, 0, 0)), -0.14, 0.095, 0.502),
     ('C', Vector((1, 0, 0)), -0.24, 0.085, 0.505),
 ]
+# Smaller trickles between them: narrower, shallower gaps (cut after the rim chips, from their own random stream, so
+# adding them left the rim as it was).
+SMALL_GAPS = [
+    ('D', Vector((0, -1, 0)), -0.22, 0.055, 0.508),
+    ('E', Vector((-1, 0, 0)), 0.27, 0.045, 0.51),
+    ('F', Vector((0, 1, 0)), 0.1, 0.06, 0.507),
+    ('G', Vector((0, 1, 0)), -0.27, 0.045, 0.51),
+    ('H', Vector((1, 0, 0)), 0.2, 0.05, 0.509),
+]
+ALL_GAPS = GAPS + SMALL_GAPS
+
+
+def trickle(hw):
+    """1 for the three main gaps; less for the small ones (thinner shoulders, columns, and a closer fall)."""
+    return 1.0 if hw >= 0.08 else hw / 0.09
 
 
 def along_axis(n):
@@ -82,23 +97,28 @@ def ball(name, centre, r, squash=(1, 1, 1)):
     return cutter(name, bm, Matrix.Translation(centre))
 
 
-random.seed(11)
-for name, n, along, hw, zb in GAPS:
+def cut_gap(name, n, along, hw, zb, rnd):
     t = along_axis(n)
     c = gap_centre(n, along)
+    small = trickle(hw)
     # Uneven U: the round bottom flares outward (worn wider on the outside) with a slight tilt.
-    cone(f'Cut.{name}.Round', Vector((c.x, c.y, zb + hw)), n, hw, 0.36, tilt=random.uniform(-0.25, 0.25))
+    cone(f'Cut.{name}.Round', Vector((c.x, c.y, zb + hw)), n, hw, 0.36, tilt=rnd.uniform(-0.25, 0.25))
     slot_size = (abs(n.x) * 0.4 + abs(t.x) * 2 * hw, abs(n.y) * 0.4 + abs(t.y) * 2 * hw, 0.5)
-    box(f'Cut.{name}.Slot', Vector((c.x, c.y, zb + hw + 0.25)), slot_size, Matrix.Rotation(random.uniform(-0.08, 0.08), 4, n))
+    box(f'Cut.{name}.Slot', Vector((c.x, c.y, zb + hw + 0.25)), slot_size, Matrix.Rotation(rnd.uniform(-0.08, 0.08), 4, n))
     # Broken shoulders, one bigger than the other.
-    for side, r in ((-1, random.uniform(0.045, 0.07)), (1, random.uniform(0.03, 0.05))):
-        ball(f'Cut.{name}.Chip{side}', Vector((c.x, c.y, 0.62)) + t * side * (hw + r * 0.45) + n * 0.03, r, (1, 1, random.uniform(0.8, 1.2)))
+    for side, r in ((-1, rnd.uniform(0.045, 0.07) * small), (1, rnd.uniform(0.03, 0.05) * small)):
+        ball(f'Cut.{name}.Chip{side}', Vector((c.x, c.y, 0.62)) + t * side * (hw + r * 0.45) + n * 0.03, r, (1, 1, rnd.uniform(0.8, 1.2)))
     # Water-worn scoop on the outer lip where it pours over.
     ball(f'Cut.{name}.Lip', Vector((c.x, c.y, zb + 0.005)) + n * 0.07, hw * 0.9, (1.3 if n.y else 0.6, 0.6 if n.y else 1.3, 0.55))
 
 
+random.seed(11)
+for gap in GAPS:
+    cut_gap(*gap, random)
+
+
 def near_gap(p):
-    return any((p - gap_centre(n, along)).length < hw + 0.11 for _, n, along, hw, _ in GAPS)
+    return any((p - gap_centre(n, along)).length < hw + 0.11 for _, n, along, hw, _ in ALL_GAPS)
 
 
 # Irregular rim: shallow chips along the top, clear of the gaps.
@@ -112,6 +132,10 @@ for i in range(40):
     if near_gap(p):
         continue
     ball(f'Cut.Rim.{i}', Vector((p.x + side[0] * out, p.y + side[1] * out, 0.62 + r * lift)), r, (1.8 if side[1] else 1, 1.8 if side[0] else 1, 1))
+
+small_rnd = random.Random(29)
+for gap in SMALL_GAPS:
+    cut_gap(*gap, small_rnd)
 
 # Bevelled box -> boolean the cutters -> voxel remesh + smooth, so every cut reads as soft clay.
 if 'Cuts' not in planter.modifiers:
@@ -335,7 +359,7 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
     lip = centres[-1]
 
     # Over the lip and down.
-    k = 34.0  # outward reach: x = sqrt(drop / k)
+    k = 34.0 / trickle(hw)  # outward reach: x = sqrt(drop / k); trickles fall closer to the wall
     path = []
     x = 0.0
     while x < 0.06:
@@ -362,7 +386,7 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
         after = lengths[i] - lip_length
         f = after / (total - lip_length)
         width = hw * 0.8 * (1 + 0.45 * f) * (1 + 0.08 * noise.noise(Vector((lengths[i] * 1.5, seed, 1))))
-        thick = 0.022 + 0.05 * min(1, f * 3)
+        thick = (0.022 + 0.05 * min(1, f * 3)) * trickle(hw)
         # The channel's shape morphs into the falling column over the first 25 cm.
         morph = ease(after / 0.25)
         fl = ease(after / 0.3)
@@ -437,7 +461,7 @@ def splash(name, at, seed, material):
 
 
 water_fall, foam_material = water_materials()
-for i, (name, n, along, hw, zb) in enumerate(GAPS):
+for i, (name, n, along, hw, zb) in enumerate(ALL_GAPS):
     _, end = waterfall(f'Fall.{name}', n, along, hw, zb, i * 7.3, water_fall)
     splash(f'Splash.{name}', Vector((end.x, end.y, POOL_Z)), i, foam_material)
 
