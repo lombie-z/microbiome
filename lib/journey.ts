@@ -38,3 +38,6 @@ export const smoothstep = (edge0: number, edge1: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
 };
+
+/** Phones and tablets get a lighter render: fewer particles, no light rays, lower resolution. */
+export const isLightDevice = () => typeof window !== 'undefined' && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);

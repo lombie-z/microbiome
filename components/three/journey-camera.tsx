@@ -82,9 +82,10 @@ export function JourneyCamera() {
       const w = MathUtils.smoothstep(p / OPEN_SHARE, 0, 1);
       cam.position.lerpVectors(heroPosition, trackPosition, w);
       cam.quaternion.slerpQuaternions(heroQuaternion, trackQuaternion, w);
-      // The track is framed for landscape; on portrait screens widen it so the sides still fit.
+      // The track is framed for landscape. On portrait screens widen it partway: enough to keep the shots readable,
+      // not so far that the close passes turn fisheye.
       const aspect = width / height;
-      const fitted = aspect < 1 ? MathUtils.radToDeg(2 * Math.atan(Math.tan(MathUtils.degToRad(trackFov / 2)) / aspect)) : trackFov;
+      const fitted = aspect < 1 ? MathUtils.radToDeg(2 * Math.atan(Math.tan(MathUtils.degToRad(trackFov / 2)) / Math.sqrt(aspect))) : trackFov;
       fov = MathUtils.lerp(HERO_FOV, fitted, w);
     }
 

@@ -3,6 +3,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import { BufferAttribute, BufferGeometry, Color, type Mesh, type Object3D, ShaderMaterial, Vector3 } from 'three';
+import { isLightDevice } from '@/lib/journey';
 
 // Spray and mist as GPU particles. Each particle loops through its own short life: it starts at aStart, moves with
 // aVelocity under gravity, and fades in and out. One material, tuned per system.
@@ -103,7 +104,8 @@ function fallSurface(scene: Object3D) {
     const flow = g.getAttribute('_flow');
     const fade = g.getAttribute('_fade');
     for (let i = 0; i < pos.count; i += 3) {
-      if ((flow && flow.getX(i) < 0.5) || (fade && fade.getX(i) < 0.4)) continue;
+      // Only where the water is falling and fully there (not the still channel, nor where the streams fade out).
+      if ((flow && flow.getX(i) < 0.5) || (fade && fade.getX(i) < 0.95)) continue;
       const p = new Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
       const n = new Vector3().fromBufferAttribute(nor, i).transformDirection(mesh.matrixWorld);
       points.push({ p, n });
@@ -117,12 +119,13 @@ const BRAID_Y = -6.5;
 
 export function Spray({ scene }: { scene: Object3D }) {
   const systems = useMemo(() => {
+    const share = isLightDevice() ? 0.45 : 1;
     const surface = fallSurface(scene);
     const pick = () => surface[Math.floor(Math.random() * surface.length)];
     return [
       // Drops peeling off the falls and dropping away.
       particles({
-        count: 2600,
+        count: Math.round(2600 * share),
         gravity: -3,
         color: '#eef6ff',
         opacity: 0.9,
@@ -139,7 +142,7 @@ export function Spray({ scene }: { scene: Object3D }) {
       }),
       // Kicked up where the big fall lands.
       particles({
-        count: 700,
+        count: Math.round(700 * share),
         gravity: -4.5,
         color: '#f2f8ff',
         opacity: 0.95,
