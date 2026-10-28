@@ -26,7 +26,7 @@ export function Effects({ sun }: { sun: Mesh | null }) {
   return (
     <EffectComposer multisampling={4} autoClear={false}>
       <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
-      <>{sun && <GodRays sun={sun} samples={48} density={0.96} decay={0.92} weight={0.45} exposure={0.5} clampMax={1} blur />}</>
+      <>{sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && <GodRays sun={sun} samples={48} density={0.96} decay={0.92} weight={0.45} exposure={0.5} clampMax={1} blur />}</>
       <Vignette ref={vignette} offset={0.35} darkness={0} />
       <Noise ref={grain} premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0} />
     </EffectComposer>

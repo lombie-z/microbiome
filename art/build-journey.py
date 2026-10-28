@@ -11,7 +11,7 @@ against the water, at its pace, looking up at it and down along it (the site hid
   215-265  Through the cloud layer; below it the sun is out.
   265-460  Spiral down with the streams as they braid, then look up at the braid winding overhead into the light.
   460-530  Ride the single big fall down, a hand's width from it.
-  530-720  Swing out to the rainbow over the pool, then settle looking into it (the close-up expansion goes here).
+  530-720  Swing out over the pool and settle on a wide, low final frame: the fall through the rainbow, the sun beside.
 """
 import math
 
@@ -37,8 +37,8 @@ SHOTS = [
     (400, Vector((0.95, 0.74, -4.6)), Vector((0.0, 0.0, -6.5)), 50.0),  # spiralling round with the twist
     (460, Vector((-0.37, 0.65, -6.4)), Vector((0.0, 0.0, -3.5)), 55.0),  # looking up the braid winding overhead into the light
     (530, Vector((-0.74, 0.13, -8.0)), Vector((0.0, 0.0, -10.6)), 50.0),  # riding the big fall down
-    (630, Vector((-3.19, -1.16, -9.8)), Vector((0.0, 0.0, -10.4)), 42.0),  # out to the rainbow over the pool
-    (720, Vector((-2.18, -1.01, -9.75)), Vector((0.0, 0.0, -10.95)), 46.0),  # settle, looking into the pool
+    (630, Vector((-2.44, -0.89, -9.4)), Vector((0.0, 0.0, -10.3)), 44.0),  # swinging out over the pool
+    (720, Vector((-3.57, -1.3, -10.15)), Vector((0.0, 0.0, -10.0)), 44.0),  # the final frame: fall, rainbow, sun
 ]
 # Sun, warm light and rainbow come in below the clouds.
 F_SUN_IN, F_SUN_FULL = 275, 380

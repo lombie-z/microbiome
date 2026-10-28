@@ -1,7 +1,7 @@
 'use client';
 
 import { SoftShadows, useProgress } from '@react-three/drei';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { Suspense, useEffect, useState } from 'react';
 import type { Mesh } from 'three';
 import { Biome } from './biome';
@@ -16,6 +16,16 @@ function Progress({ onProgress }: { onProgress: (progress: number) => void }) {
   return null;
 }
 
+// Dev switches for isolating rendering problems: ?nofx (no post effects), ?nospray.
+const flag = (name: string) => process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).has(name);
+
+// Without the effect composer something still has to render (the outline pass's positive-priority frame callback
+// turns off R3F's own rendering).
+function Render() {
+  useFrame(({ gl, scene, camera }) => gl.render(scene, camera), 1);
+  return null;
+}
+
 export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => void; onProgress: (progress: number) => void }) {
   const [sun, setSun] = useState<Mesh | null>(null);
   return (
@@ -27,7 +37,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
       <Suspense fallback={null}>
         <Biome onReady={onReady} onSun={setSun} />
       </Suspense>
-      <Effects sun={sun} />
+      {flag('nofx') ? <Render /> : <Effects sun={sun} />}
     </Canvas>
   );
 }

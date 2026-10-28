@@ -24,10 +24,13 @@ export type WaterKind = 'falling' | 'still' | 'pool';
 export const waterTime = { value: 0 };
 
 export function waterMaterial(kind: WaterKind): Material {
+  // The pool lies flat under the low sun: a softer sheen there, or the sun's reflection blooms into a glare.
+  const pool = kind === 'pool';
   const material = new MeshPhysicalMaterial({
-    roughness: 0.06,
-    clearcoat: 1,
-    clearcoatRoughness: 0.03,
+    roughness: pool ? 0.18 : 0.06,
+    clearcoat: pool ? 0.35 : 1,
+    clearcoatRoughness: pool ? 0.12 : 0.03,
+    specularIntensity: pool ? 0.45 : 1,
     transparent: true,
     depthWrite: kind !== 'falling',
     side: kind === 'falling' ? DoubleSide : FrontSide,
@@ -106,7 +109,7 @@ ${NOISE}`
   diffuseColor.rgb = mix(water, vec3(0.95, 0.98, 1.0), white);
   diffuseColor.a = mix(mix(0.95, 0.85, vFlow), 1.0, white) * vFade;
   // White water glows a touch past 1 so the bloom catches it.
-  totalEmissiveRadiance += vec3(0.95, 0.98, 1.0) * white * 0.35;
+  totalEmissiveRadiance += vec3(0.95, 0.98, 1.0) * white * 0.18;
 }`
       );
   };

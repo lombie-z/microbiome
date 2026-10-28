@@ -4,7 +4,6 @@ import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import {
-  AdditiveBlending,
   Color,
   type DirectionalLight,
   DoubleSide,
@@ -19,6 +18,7 @@ import {
 import { BEATS, journey, smoothstep } from '@/lib/journey';
 import { SilhouetteOutline } from './silhouette-outline';
 import { bloomAt } from './sky';
+import { Spray } from './spray';
 import { useStudioReflections } from './studio-environment';
 import { waterMaterial, waterTime } from './water';
 
@@ -45,7 +45,7 @@ const ownerName = (o: Object3D) => (o.parent?.name && o.name !== o.parent.name &
 
 // Below the planter: none of it casts shadows or takes part in the sticker outline. (three.js drops the dots from
 // glTF node names, so Blender's Fall.A arrives as FallA.)
-const SKY_PARTS = ['Fall', 'Splash', 'Pool', 'Basin', 'SkyCloud', 'SkyDome', 'Sun', 'Rainbow'];
+const SKY_PARTS = ['Fall', 'Splash', 'Spray', 'Pool', 'Basin', 'SkyCloud', 'SkyDome', 'Sun', 'Rainbow'];
 const isSkyPart = (name: string) => SKY_PARTS.some((p) => name.startsWith(p));
 
 // The lettering tumbles free of the sticker outline, and the water spills off the sticker.
@@ -81,20 +81,20 @@ function rainbowMaterial() {
       uniform float uOpacity;
       varying vec2 vUv;
       vec3 spectrum(float x) {
-        vec3 c[6] = vec3[6](vec3(1.0, 0.3, 0.3), vec3(1.0, 0.62, 0.25), vec3(1.0, 0.93, 0.35), vec3(0.4, 0.86, 0.45), vec3(0.35, 0.62, 1.0), vec3(0.62, 0.45, 1.0));
+        vec3 c[6] = vec3[6](vec3(0.95, 0.25, 0.3), vec3(1.0, 0.55, 0.2), vec3(1.0, 0.86, 0.3), vec3(0.35, 0.78, 0.42), vec3(0.3, 0.55, 0.95), vec3(0.55, 0.38, 0.9));
         float f = clamp(x, 0.0, 0.999) * 5.0;
         int i = int(floor(f));
         return mix(c[i], c[min(i + 1, 5)], fract(f));
       }
       void main() {
         float along = 1.0 - vUv.y;
-        float a = sin(3.14159 * vUv.x) * sin(3.14159 * along) * uOpacity * 0.55;
-        gl_FragColor = vec4(spectrum(vUv.x) * a * 1.4, a);
+        // pow() of a negative is NaN (and bloom smears one NaN pixel over the whole screen), so clamp first.
+        float a = pow(max(sin(3.14159 * vUv.x), 0.0), 0.6) * pow(max(sin(3.14159 * along), 0.0), 0.8) * uOpacity * 0.7;
+        gl_FragColor = vec4(spectrum(vUv.x), a);
         #include <colorspace_fragment>
       }`,
     transparent: true,
     depthWrite: false,
-    blending: AdditiveBlending,
     side: DoubleSide,
     fog: false,
   });
@@ -203,7 +203,11 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
     waterTime.value += Math.min(delta, 1 / 20);
-    if (rainbow.current) rainbow.current.uniforms.uOpacity.value = smoothstep(BEATS.bowIn, BEATS.bowFull, journey.frame);
+    if (rainbow.current) {
+      const bow = smoothstep(BEATS.bowIn, BEATS.bowFull, journey.frame);
+      rainbow.current.uniforms.uOpacity.value = bow;
+      rainbow.current.visible = bow > 0.001;
+    }
     // The studio key gives way to the warm sun (components/three/sky.tsx) below the clouds.
     if (key.current) key.current.intensity = 1.8 - 0.7 * bloomAt(journey.frame);
     const clouds = smoothstep(30, 110, journey.frame);
@@ -256,6 +260,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         shadow-camera-bottom={-1.5}
       />
       <primitive object={scene} />
+      {!(process.env.NODE_ENV === 'development' && window.location.search.includes('nospray')) && <Spray scene={scene} />}
       <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>
   );
