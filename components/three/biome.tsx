@@ -10,7 +10,7 @@ import {
   type Material,
   type Mesh,
   MeshBasicMaterial,
-  type MeshStandardMaterial,
+  type MeshPhysicalMaterial,
   type Object3D,
   ShaderMaterial,
   Vector3,
@@ -119,8 +119,12 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       const name = ownerName(mesh);
       // Blender's cloud material glows white inside (the fly-through); glTF carries that out as an emissive glow on
       // the whole surface. The web does the inside itself (whiteoutCloud), so drop it.
-      const own = mesh.material as MeshStandardMaterial;
+      const own = mesh.material as MeshPhysicalMaterial;
       if (own.name === 'Cloud' && own.emissive) own.emissive.setRGB(0, 0, 0);
+      // Blender's glossy clay comes through with near-mirror clearcoats; their sun glints overflow the effects'
+      // half-float buffer (Inf), which the bloom turns into black specks. A floor on roughness keeps them finite.
+      if (own.isMeshStandardMaterial) own.roughness = Math.max(own.roughness, 0.12);
+      if (own.isMeshPhysicalMaterial) own.clearcoatRoughness = Math.max(own.clearcoatRoughness, 0.12);
       if (name === 'Water') mesh.material = still;
       else if (name === 'Pool') mesh.material = pool;
       else if (name.startsWith('Fall')) {
@@ -185,12 +189,16 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     });
     const opacities = [...cloudMaterials.current.values()].map((m) => [m, m.visible] as const);
     for (const [m] of opacities) m.visible = true;
-    gl.compileAsync(threeScene, camera)
+    // Never let the overlay hang on it: some browsers stall parallel shader compiles (e.g. in a background tab).
+    const settle = new Promise((resolve) => setTimeout(resolve, 3000));
+    Promise.race([gl.compileAsync(threeScene, camera), settle])
       .catch(() => {})
       .then(() => {
         for (const o of hidden) o.visible = false;
         for (const [m, visible] of opacities) m.visible = visible;
         requestAnimationFrame(() => requestAnimationFrame(() => live && onReady()));
+        // rAF doesn't run in a hidden tab; report anyway so it's ready when the tab comes back.
+        setTimeout(() => live && onReady(), 600);
       });
     return () => {
       live = false;

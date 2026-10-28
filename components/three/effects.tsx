@@ -4,9 +4,18 @@ import { useFrame } from '@react-three/fiber';
 import { Bloom, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
 import { BlendFunction, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
-import type { Mesh } from 'three';
+import { type Mesh, ShaderChunk } from 'three';
 import { journey, smoothstep } from '@/lib/journey';
 import { bloomAt } from './sky';
+
+// Every built-in material ends with this chunk: keep its output finite and in range. The effects render to a
+// half-float buffer, and one Inf or NaN pixel (a sun glint on glossy clay can overflow it) gets smeared by the bloom
+// into a black speck, or across the whole screen.
+if (!ShaderChunk.dithering_fragment.includes('isnan')) {
+  ShaderChunk.dithering_fragment += `
+if (any(isnan(gl_FragColor)) || any(isinf(gl_FragColor))) gl_FragColor = vec4(0.0);
+gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(16.0));`;
+}
 
 /**
  * The finish: bloom on anything brighter than white (the sun, glints and white water), light rays from the sun, and

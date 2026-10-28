@@ -25,11 +25,13 @@ export const waterTime = { value: 0 };
 
 export function waterMaterial(kind: WaterKind): Material {
   // The pool lies flat under the low sun: a softer sheen there, or the sun's reflection blooms into a glare.
+  // Nothing smoother than ~0.1 roughness: a near-mirror highlight overflows the effects' half-float buffer (Inf), and
+  // bloom turns that into black specks.
   const pool = kind === 'pool';
   const material = new MeshPhysicalMaterial({
-    roughness: pool ? 0.18 : 0.06,
+    roughness: pool ? 0.18 : 0.1,
     clearcoat: pool ? 0.35 : 1,
-    clearcoatRoughness: pool ? 0.12 : 0.03,
+    clearcoatRoughness: pool ? 0.12 : 0.1,
     specularIntensity: pool ? 0.45 : 1,
     transparent: true,
     depthWrite: kind !== 'falling',
