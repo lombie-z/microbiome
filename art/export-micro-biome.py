@@ -31,7 +31,7 @@ letters = [o for o in root.children_recursive if o.type in {'FONT', 'MESH'} and 
 back = [o for o in letters if (o.matrix_world.translation - root.matrix_world.translation).dot(cam_dir) < 0]
 # The hero shows the biome and its falls; the sky below (clouds, basin, pool, sun, rainbow) and the spill cutters stay
 # out of the still.
-SKY = ('SkyCloud', 'Basin', 'Pool', 'Splash', 'Sun', 'Rainbow', 'Fall.Main')
+SKY = ('SkyCloud', 'Pool', 'Splash', 'Sun', 'Rainbow', 'Fall.Main', 'Macro', 'Garden')
 hero = [o for o in root.children_recursive if o.type in {'MESH', 'FONT'} and not o.name.startswith(SKY) and o.name != 'Planter.Source']
 everything = [o for o in scene.objects if o.type in {'MESH', 'FONT'}]
 
@@ -78,7 +78,8 @@ bpy.data.objects.remove(bpy.data.objects['Planter.Source'])
 
 meshes = []
 for o in list(root.children_recursive):
-    if o.type not in {'MESH', 'FONT'}:
+    # The macro biome's linked copies (art/build-macro.py) take their source's finished mesh below.
+    if o.type not in {'MESH', 'FONT'} or 'source' in o.keys():
         continue
     o = freeze(o)
     ratio = next((r for prefix, r in DECIMATE.items() if o.name.startswith(prefix)), None)
@@ -93,6 +94,23 @@ for o in list(root.children_recursive):
             o.data.attributes[name].name = '_' + name
     o.data.color_attributes.active_color = o.data.color_attributes.new('AO', 'BYTE_COLOR', 'CORNER')
     meshes.append(o)
+
+# The macro copies reuse their source's frozen, decimated, AO-baked mesh, so the glb instances them (nearly free).
+for o in [o for o in root.children_recursive if 'source' in o.keys()]:
+    source = bpy.data.objects[o['source']]
+    if o.type == 'MESH':
+        o.modifiers.clear()
+        o.data = source.data
+        continue
+    copy = bpy.data.objects.new(o.name + '_m', source.data)
+    for c in o.users_collection:
+        c.objects.link(copy)
+    copy.parent = o.parent
+    copy.matrix_parent_inverse = o.matrix_parent_inverse.copy()
+    copy.location, copy.rotation_euler, copy.scale = o.location.copy(), o.rotation_euler.copy(), o.scale.copy()
+    name = o.name
+    bpy.data.objects.remove(o)
+    copy.name = name
 
 scene.render.engine = 'CYCLES'
 scene.cycles.device = 'CPU'

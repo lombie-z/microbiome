@@ -18,6 +18,7 @@ POOL_Z = -11.0  # surface of the pool the falls land in
 # Below the cloud layer the falls slowly bend together and braid (MERGE_TOP to MERGE_Z). Over the last stretch they
 # fade out as one big fall fades in around them (MAIN_TOP down to the pool), so there's no hard join.
 MERGE_TOP, MERGE_Z, MAIN_TOP = -2.1, -7.0, -5.6
+SPREAD = 0.65  # how much wider the big fall gets by the time it reaches the pool
 STREAMS_FADE = (-6.0, -7.0)  # streams go from opaque to gone between these heights
 MAIN_FADE = (-5.6, -6.8)  # the big fall goes from gone to opaque
 # (name, outward face normal, position along the face, half-width, gap floor z). A and B face the hero camera; C is
@@ -472,7 +473,9 @@ def main_fall(name, material, ring=48):
         if h < 0.3:
             radius = 0.3 * math.sin(max(h, 0.002) / 0.3 * math.pi / 2)  # low, rounded crown inside the braid
         else:
-            radius = lerp(0.3, 0.44, ease((h - 0.3) / (MAIN_TOP - bottom - 0.3)))
+            radius = lerp(0.3, 0.42, ease((h - 0.3) / (MAIN_TOP - bottom - 0.3)))
+        # Below the braid it spreads as it falls, so it holds its own against the giant biome it lands in.
+        radius += SPREAD * max(0.0, (MERGE_Z - z) / (MERGE_Z - bottom)) ** 1.6
         centre = Vector((noise.noise(Vector((z * 0.6, 4.2, 0))) * 0.04, noise.noise(Vector((z * 0.6, 7.7, 0))) * 0.04, z))
         ring_verts = []
         for j in range(ring):
@@ -524,7 +527,7 @@ def splash(name, at, seed, material, scale=1.0):
         a = rnd.uniform(0, 2 * math.pi)
         r = rnd.uniform(0.08, 0.24) * scale
         size = rnd.uniform(0.03, 0.075) * (1 + 0.4 * (scale - 1))
-        geom = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=size)
+        geom = bmesh.ops.create_icosphere(bm, subdivisions=1 if scale == 1 else 2, radius=size)
         bmesh.ops.translate(bm, vec=at + Vector((math.cos(a) * r, math.sin(a) * r, rnd.uniform(0.0, 0.12) * scale)), verts=geom['verts'])
     for radius in (0.26 * scale, 0.42 * scale, 0.6 * scale):
         geom = bmesh.ops.create_circle(bm, segments=64, radius=radius)
@@ -550,87 +553,14 @@ for o in [o for o in bpy.data.objects if o.name.startswith('Splash.')]:
 for i, (name, n, along, hw, zb) in enumerate(ALL_GAPS):
     waterfall(f'Fall.{name}', n, along, hw, zb, i * 7.3, water_fall)
 main_fall('Fall.Main', water_fall)
-splash('Splash', Vector((0, 0, POOL_Z)), 0, foam_material, scale=2.2)
+splash('Splash', Vector((0, 0, POOL_Z)), 0, foam_material, scale=4.5)
 
 
-# --- Pool basin -------------------------------------------------------------------------------------------------------
+# --- Pool --------------------------------------------------------------------------------------------------------------
 
-
-def clay_material(name, rgb, roughness=0.3):
-    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
-    mat.use_nodes = True
-    bsdf = mat.node_tree.nodes.get('Principled BSDF')
-    bsdf.inputs['Base Color'].default_value = (*rgb, 1)
-    bsdf.inputs['Roughness'].default_value = roughness
-    bsdf.inputs['Coat Weight'].default_value = 1.0
-    return mat
-
-
-def basin():
-    """A soft clay island under the planter, hollowed into a pool wide enough to catch all three falls."""
-    # Overlapping clay lumps; the first voxel remesh fuses them into one soft body.
-    rnd = random.Random(5)
-    bm = bmesh.new()
-
-    def lump(centre, scale):
-        geom = bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20, radius=1)
-        verts = geom['verts']
-        bmesh.ops.scale(bm, vec=scale, verts=verts)
-        bmesh.ops.translate(bm, vec=centre, verts=verts)
-
-    lump((0, 0, POOL_Z - 0.35), (1.95, 1.8, 0.62))
-    for i in range(9):
-        a = i / 9 * 2 * math.pi + rnd.uniform(-0.2, 0.2)
-        r = rnd.uniform(0.42, 0.6)
-        lump((math.cos(a) * 1.6, math.sin(a) * 1.45, POOL_Z - 0.12 + rnd.uniform(-0.05, 0.08)), (r, r, r * 0.8))
-    me = bpy.data.meshes.new('Basin')
-    bm.to_mesh(me)
-    bm.free()
-    island = fresh_object('Basin', me)
-    island.parent = root
-    fuse = island.modifiers.new('Fuse', 'REMESH')
-    fuse.mode = 'VOXEL'
-    fuse.voxel_size = 0.03
-    hollow_me = bpy.data.meshes.new('Basin.Hollow')
-    bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=48, v_segments=24, radius=1)
-    bmesh.ops.scale(bm, vec=(1.35, 1.25, 0.32), verts=bm.verts)
-    bmesh.ops.translate(bm, vec=(0, 0, POOL_Z + 0.08), verts=bm.verts)
-    bm.to_mesh(hollow_me)
-    bm.free()
-    hollow = fresh_object('Basin.Hollow', hollow_me, cutters)
-    hollow.hide_render = True
-    hollow.display_type = 'WIRE'
-    cut = island.modifiers.new('Hollow', 'BOOLEAN')
-    cut.operation = 'DIFFERENCE'
-    cut.object = hollow
-    cut.solver = 'EXACT'
-    remesh = island.modifiers.new('Remesh', 'REMESH')
-    remesh.mode = 'VOXEL'
-    remesh.voxel_size = 0.02
-    remesh.use_smooth_shade = True
-    soften = island.modifiers.new('Soften', 'CORRECTIVE_SMOOTH')
-    soften.factor = 0.5
-    soften.iterations = 8
-    soften.smooth_type = 'SIMPLE'
-    soften.use_only_smooth = True
-    me.materials.append(clay_material('Basin', (0.86, 0.42, 0.26), 0.25))
-
-    # Pool surface: a disc at the waterline, dense enough to ripple on the web.
-    bm = bmesh.new()
-    bmesh.ops.create_circle(bm, cap_ends=True, segments=96, radius=1)
-    bmesh.ops.scale(bm, vec=(1.3, 1.2, 1), verts=bm.verts)
-    bmesh.ops.triangulate(bm, faces=bm.faces)
-    bmesh.ops.subdivide_edges(bm, edges=bm.edges, cuts=3, use_grid_fill=True)
-    bmesh.ops.translate(bm, vec=(0, 0, POOL_Z), verts=bm.verts)
-    pool_me = bpy.data.meshes.new('Pool')
-    bm.to_mesh(pool_me)
-    bm.free()
-    pool_me.materials.append(bpy.data.materials['Water'])
-    for poly in pool_me.polygons:
-        poly.use_smooth = True
-    pool = fresh_object('Pool', pool_me)
-    pool.parent = root
-
-
-basin()
+# The pool the falls land in is now the macro biome's water (art/build-macro.py); the old clay basin is retired.
+for name in ('Basin', 'Pool'):
+    if name in bpy.data.objects:
+        bpy.data.objects.remove(bpy.data.objects[name])
+if 'Basin.Hollow' in bpy.data.objects:
+    bpy.data.objects.remove(bpy.data.objects['Basin.Hollow'])

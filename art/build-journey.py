@@ -8,10 +8,12 @@ against the water, at its pace, looking up at it and down along it (the site hid
   0-80     Open up: from the blog's near-orthographic hero, a dolly zoom (lens widens as the camera closes in, so the
            biome holds its size).
   80-215   Tuck in beside fall A under the lip, looking up at the planter; tip over and fall with it, looking down.
-  215-265  Through the cloud layer; below it the sun is out.
+  215-265  Past the cloud layer; below it the sun is out.
   265-460  Spiral down with the streams as they braid, then look up at the braid winding overhead into the light.
-  460-530  Ride the single big fall down, a hand's width from it.
-  530-720  Swing out over the pool and settle on a wide, low final frame: the fall through the rainbow, the sun beside.
+  460-670  Keep looking up while drifting down and away from the fall, levelling out at the water: eye level in the
+           shoreline garden (art/build-macro.py), the frog in front of the splash.
+  670-820  Rise over the garden and pull right back: the giant biome below, the small one floating above it, its
+           falls pouring down into the big one (micro to macro).
 """
 import math
 
@@ -19,7 +21,7 @@ import bpy
 from mathutils import Vector
 
 scene = bpy.context.scene
-F_OPEN, F_END = 80, 720
+F_OPEN, F_END = 80, 820
 HERO_TARGET = Vector((0, 0, 0.92))
 HERO_DIRECTION = Vector((-1, -1, 0.75)).normalized()  # the blog's view (PreviewCam)
 HERO_FOV, OPEN_FOV = 6.0, 38.0
@@ -36,13 +38,17 @@ SHOTS = [
     (340, Vector((0.69, -1.31, -3.0)), Vector((0.0, 0.0, -5.5)), 48.0),  # beside the gathering streams, looking down the braid
     (400, Vector((0.95, 0.74, -4.6)), Vector((0.0, 0.0, -6.5)), 50.0),  # spiralling round with the twist
     (460, Vector((-0.37, 0.65, -6.4)), Vector((0.0, 0.0, -3.5)), 55.0),  # looking up the braid winding overhead into the light
-    (530, Vector((-0.74, 0.13, -8.0)), Vector((0.0, 0.0, -10.6)), 50.0),  # riding the big fall down
-    (630, Vector((-2.44, -0.89, -9.4)), Vector((0.0, 0.0, -10.3)), 44.0),  # swinging out over the pool
-    (720, Vector((-3.57, -1.3, -10.15)), Vector((0.0, 0.0, -10.0)), 44.0),  # the final frame: fall, rainbow, sun
+    # Still looking up, drifting down and away from the fall, levelling out to eye height as it reaches the water.
+    (530, Vector((-1.39, 0.8, -8.0)), Vector((0.0, 0.0, -5.6)), 52.0),
+    (600, Vector((-2.27, 0.4, -9.9)), Vector((0.0, 0.0, -8.2)), 52.0),
+    (670, Vector((-2.4, -0.35, -10.72)), Vector((0.0, 0.15, -10.3)), 52.0),  # eye level in the garden: the frog, the fall
+    (710, Vector((-2.7, -0.55, -9.5)), Vector((-0.3, 0.3, -10.4)), 48.0),  # rising over the garden
+    (765, Vector((-7.0, -6.0, -5.0)), Vector((-0.8, 0.8, -8.5)), 40.0),  # pulling back over the giant planter's wall
+    (820, Vector((-18.5, -16.7, 7.2)), Vector((-0.9, 0.9, -6.0)), 34.0),  # the final frame: micro over macro
 ]
 # Sun, warm light and rainbow come in below the clouds.
 F_SUN_IN, F_SUN_FULL = 275, 380
-F_BOW_IN, F_BOW_FULL = 540, 630
+F_BOW_IN, F_BOW_FULL = 560, 640
 
 
 def ease(x):

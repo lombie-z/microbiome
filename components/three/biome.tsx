@@ -7,6 +7,7 @@ import {
   Color,
   type DirectionalLight,
   DoubleSide,
+  type Euler,
   type Material,
   type Mesh,
   MeshBasicMaterial,
@@ -28,15 +29,28 @@ const URL = '/models/micro-biome.glb';
 // The letter ring orbits this point; the sticker band sits at its depth so the ring weaves in front of and behind it.
 const OUTLINE_DEPTH = new Vector3(0, 0.62, 0);
 
-type Animated = { node: Object3D; kind: 'ring' | 'cloud' | 'star' | 'letter' | 'water'; i: number; base: { position: Vector3; scale: Vector3; rotY: number } };
+type Kind = 'ring' | 'cloud' | 'star' | 'letter' | 'water' | 'dragonfly' | 'wing' | 'frog' | 'reed' | 'pad' | 'snail';
+type Animated = { node: Object3D; kind: Kind; i: number; base: { position: Vector3; scale: Vector3; rotation: Euler; rotY: number } };
 
-function classify(name: string): Animated['kind'] | null {
-  if (name === 'LetterRing') return 'ring';
-  if (name === 'LetterRingTilt') return null;
-  if (name.startsWith('Cloud')) return 'cloud';
-  if (name.startsWith('Star')) return 'star';
-  if (name.startsWith('Letter') || name.startsWith('Word')) return 'letter';
-  if (name.startsWith('Water')) return 'water';
+function classify(name: string): Kind | null {
+  // The shoreline garden (art/build-macro.py).
+  if (name.startsWith('Garden')) {
+    if (/^GardenDragonfly\d+$/.test(name)) return 'dragonfly';
+    if (name.includes('Wing')) return 'wing';
+    if (name === 'GardenFrogBody') return 'frog';
+    if (name.startsWith('GardenReed')) return 'reed';
+    if (name.startsWith('GardenLilyPad')) return 'pad';
+    if (name === 'GardenSnail') return 'snail';
+    return null;
+  }
+  // The giant copy idles like the original (Macro.LetterRing arrives as MacroLetterRing).
+  const own = name.startsWith('Macro') ? name.slice(5) : name;
+  if (own === 'LetterRing') return 'ring';
+  if (own === 'LetterRingTilt') return null;
+  if (own.startsWith('Cloud')) return 'cloud';
+  if (own.startsWith('Star')) return 'star';
+  if (own.startsWith('Letter') || own.startsWith('Word')) return 'letter';
+  if (own.startsWith('Water')) return 'water';
   return null;
 }
 
@@ -45,7 +59,7 @@ const ownerName = (o: Object3D) => (o.parent?.name && o.name !== o.parent.name &
 
 // Below the planter: none of it casts shadows or takes part in the sticker outline. (three.js drops the dots from
 // glTF node names, so Blender's Fall.A arrives as FallA.)
-const SKY_PARTS = ['Fall', 'Splash', 'Spray', 'Pool', 'Basin', 'SkyCloud', 'SkyDome', 'Sun', 'Rainbow'];
+const SKY_PARTS = ['Fall', 'Splash', 'Spray', 'Pool', 'SkyCloud', 'SkyDome', 'Sun', 'Rainbow', 'Macro', 'Garden'];
 const isSkyPart = (name: string) => SKY_PARTS.some((p) => name.startsWith(p));
 
 // The lettering tumbles free of the sticker outline, and the water spills off the sticker.
@@ -163,10 +177,11 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         child.receiveShadow = !sky;
       }
       const kind = classify(child.name);
-      // Only animate the named object nodes, not glTF's per-primitive children.
-      if (kind && child.parent && !classify(child.parent.name)) {
+      // Only animate the named object nodes, not glTF's per-primitive children (a dragonfly's wings flap on their own).
+      if (kind && child.parent && (kind === 'wing' || !classify(child.parent.name))) {
         counts[kind] = (counts[kind] ?? 0) + 1;
-        list.push({ node: child, kind, i: counts[kind], base: { position: child.position.clone(), scale: child.scale.clone(), rotY: child.rotation.y } });
+        const base = { position: child.position.clone(), scale: child.scale.clone(), rotation: child.rotation.clone(), rotY: child.rotation.y };
+        list.push({ node: child, kind, i: counts[kind], base });
       }
     });
     return list;
@@ -245,6 +260,32 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
           break;
         case 'water':
           node.position.y = base.position.y + Math.sin(t * 0.9) * 0.004;
+          break;
+        case 'dragonfly':
+          // Hovering and darting over the reeds.
+          node.position.set(
+            base.position.x + Math.sin(t * 0.9 + i * 2) * 0.35 + Math.sin(t * 3.1 + i) * 0.03,
+            base.position.y + Math.sin(t * 2.3 + i) * 0.05 + Math.sin(t * 0.5 + i) * 0.1,
+            base.position.z + Math.cos(t * 0.7 + i * 1.3) * 0.3
+          );
+          node.rotation.y = base.rotY + Math.sin(t * 0.45 + i) * 1.2;
+          break;
+        case 'wing':
+          node.rotation.x = base.rotation.x + Math.sin(t * 42 + i * 1.7) * 0.45;
+          break;
+        case 'frog':
+          node.scale.copy(base.scale).multiplyScalar(1 + Math.sin(t * 2.6) * 0.035);
+          break;
+        case 'reed':
+          node.rotation.x = base.rotation.x + Math.sin(t * 1.1 + i * 0.7) * 0.045;
+          node.rotation.z = base.rotation.z + Math.cos(t * 0.9 + i * 0.5) * 0.04;
+          break;
+        case 'pad':
+          node.position.y = base.position.y + Math.sin(t * 0.8 + i) * 0.006;
+          node.rotation.y = base.rotY + Math.sin(t * 0.2 + i) * 0.08;
+          break;
+        case 'snail':
+          node.position.x = base.position.x + Math.sin(t * 0.08) * 0.06;
           break;
       }
     }

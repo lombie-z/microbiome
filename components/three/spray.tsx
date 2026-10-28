@@ -115,6 +115,7 @@ function fallSurface(scene: Object3D) {
 }
 
 const POOL_Y = -11;
+const FALL_FOOT = 1.05;
 const BRAID_Y = -6.5;
 
 export function Spray({ scene }: { scene: Object3D }) {
@@ -142,7 +143,7 @@ export function Spray({ scene }: { scene: Object3D }) {
       }),
       // Kicked up where the big fall lands.
       particles({
-        count: Math.round(700 * share),
+        count: Math.round(1400 * share),
         gravity: -4.5,
         color: '#f2f8ff',
         opacity: 0.95,
@@ -160,17 +161,17 @@ export function Spray({ scene }: { scene: Object3D }) {
       }),
       // Mist off the pool, rising and spreading slowly.
       particles({
-        count: 90,
+        count: 140,
         gravity: 0,
         color: '#fff8ef',
         opacity: 0.16,
         softness: 1,
         emit: (_, start, velocity) => {
           const a = Math.random() * Math.PI * 2;
-          const r = 0.2 + Math.random() * 1.2;
+          const r = FALL_FOOT * 0.6 + Math.random() * 2.2;
           start.set(Math.cos(a) * r, POOL_Y + 0.05, Math.sin(a) * r);
-          velocity.set(Math.cos(a) * 0.08, 0.12 + Math.random() * 0.1, Math.sin(a) * 0.08);
-          return { life: 5 + Math.random() * 4, size: 0.9 + Math.random() * 1.1 };
+          velocity.set(Math.cos(a) * 0.12, 0.15 + Math.random() * 0.15, Math.sin(a) * 0.12);
+          return { life: 5 + Math.random() * 4, size: 1.2 + Math.random() * 1.6 };
         },
       }),
       // A softer haze where the streams braid into one.

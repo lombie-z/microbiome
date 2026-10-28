@@ -186,7 +186,7 @@ def rainbow_material():
 
 
 # An arch over the pool, the big fall pouring through its middle, facing the way the camera lands.
-RADIUS, WIDTH, SEGMENTS = 1.75, 0.3, 96
+RADIUS, WIDTH, SEGMENTS = 2.6, 0.42, 96
 bm = bmesh.new()
 uv_layer = bm.loops.layers.uv.new('UVMap')
 rows = []
