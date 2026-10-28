@@ -13,6 +13,7 @@ root = bpy.data.objects['MicroBiome']
 planter = bpy.data.objects['Planter']
 
 WATER_Z = 0.522  # surface of the water in the planter
+WATER_HALF = 0.43  # the surface runs just into the inner walls (at 0.422) so no wall shows below the waterline
 POOL_Z = -5.5  # surface of the pool the falls land in
 # (name, outward face normal, position along the face, half-width, gap floor z). A and B face the hero camera; C is
 # on the back and turns up while the camera circles.
@@ -128,6 +129,13 @@ if 'Cuts' not in planter.modifiers:
     soften.smooth_type = 'SIMPLE'
     soften.use_only_smooth = True
 planter.modifiers['Cuts'].collection = cutters
+
+# Box water: widen the surface to the walls (it was 0.792 across, leaving a strip of wall visible under the waterline).
+box_water = bpy.data.objects['Water'].data
+half = max(abs(v.co.x) for v in box_water.vertices)
+for v in box_water.vertices:
+    v.co.x *= WATER_HALF / half
+    v.co.y *= WATER_HALF / half
 
 # --- Waterfalls -------------------------------------------------------------------------------------------------------
 
@@ -313,9 +321,10 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
     c = t * along
     rings, centres = [], []
 
-    # Through the gap: starting where the box's water surface ends (0.396) so the two see-through layers never stack,
-    # level with it, then dropping toward the lip.
-    channel = [0.395 + 0.105 * i / 14 for i in range(15)]
+    # Through the gap: starting where the box's water surface ends so the two see-through layers never stack, level
+    # with it, then dropping toward the lip.
+    start = WATER_HALF - 0.002
+    channel = [start + (0.5 - start) * i / 14 for i in range(15)]
     lip_floor = zb + hw - channel_radius(hw, 0.5)
     for d in channel:
         h = WATER_Z - 0.0015 - (WATER_Z - 0.0015 - (lip_floor + 0.016)) * ease((d - 0.42) / 0.08)
