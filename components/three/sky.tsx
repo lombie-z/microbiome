@@ -9,14 +9,15 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // Above the clouds everything sits on the blog's plaster; below them the sky warms into a low sun.
 export const PLASTER = new Color('#f5f2ed');
-const SKY_TOP = new Color('#e9b0ad');
-const SKY_HORIZON = new Color('#ffdcac');
+const SKY_TOP = new Color('#c9a9c2');
+const SKY_HORIZON = new Color('#ffd49c');
 const SUN_GLOW = new Color('#ffcf88');
-const CLOUD_LIT = new Color('#ffd9b0');
-const CLOUD_SHADE = new Color('#e9a3a6');
-const WARM_LIGHT = new Color('#ffc890');
+const CLOUD_LIT = new Color('#ffd6a6');
+const CLOUD_SHADE = new Color('#c48fa3');
+const WARM_LIGHT = new Color('#ffcba3');
 /** Where the sun sits (art/build-sky.py), in three.js space (y up). */
-export const SUN_POSITION = new Vector3(60, -0.5, -20);
+export const SUN_POSITION = new Vector3(55, 9, -34);
+const LANDING_LIGHT = new Vector3(-20, 16, -42);
 
 /** 0 above the clouds, 1 once the sun is fully out. */
 export const bloomAt = (frame: number) => smoothstep(BEATS.sunIn, BEATS.sunFull, frame);
@@ -37,30 +38,46 @@ uniform vec3 uCloudShade;
 uniform vec3 uSun;
 uniform float uOpacity;
 uniform float uTime;
+uniform float uDebug;
 varying vec3 vDirection;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float vnoise(vec2 p) {
-  vec2 i = floor(p), f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float vnoise3(vec3 p) {
+  vec3 i = floor(p), f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), u.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), u.x), u.y),
+    mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), u.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), u.x), u.y),
+    u.z);
 }
-float fbm(vec2 p) {
+float fbm3(vec3 p) {
   float v = 0.0, a = 0.5;
-  for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.03 + 7.1; a *= 0.5; }
+  for (int i = 0; i < 5; i++) { v += a * vnoise3(p); p = p * 2.07 + 5.3; a *= 0.5; }
   return v;
+}
+float clouds(vec3 d) {
+  // Flattened toward the horizon (clouds are layers, seen edge-on far away), drifting slowly.
+  vec3 p = vec3(d.x, d.y * 2.6, d.z) * 3.2 + vec3(uTime * 0.01, 0.0, 0.0);
+  p += vec3(fbm3(p * 0.7 + 9.0), 0.0, fbm3(p * 0.7 + 17.0)) * 0.8;  // billows, not streaks
+  return fbm3(p);
 }
 void main() {
   vec3 d = normalize(vDirection);
-  vec3 sky = mix(uHorizon, uTop, smoothstep(-0.05, 0.6, d.y));
+  vec3 sky = mix(uHorizon, uTop, smoothstep(-0.02, 0.32, d.y));
   float toward = max(dot(d, uSun), 0.0);
   // A wide warm haze around the sun and a brighter halo close in (the sun disc itself is a mesh, for the rays).
-  sky += uGlow * (pow(toward, 5.0) * 0.45 + pow(toward, 48.0) * 0.8);
+  // A soft wide glow and a small hot core (the disc itself is a mesh, so the light rays have a source).
+  sky += uGlow * (pow(toward, 8.0) * 0.3 + pow(toward, 90.0) * 0.5 + pow(toward, 900.0) * 3.0);
   // Soft drifting clouds on a dome overhead: lit gold toward the sun, rosy away from it, thinning to the horizon.
-  vec2 uv = d.xz / (d.y + 0.18) * 1.2 + vec2(uTime * 0.004, 0.0);
-  float c = smoothstep(0.48, 0.78, fbm(uv));
-  float shade = smoothstep(0.45, 0.9, fbm(uv * 1.7 + 3.0));
-  vec3 cloud = mix(uCloudLit, uCloudShade, shade * 0.7) + uGlow * pow(toward, 6.0) * 0.6;
-  sky = mix(sky, cloud, c * smoothstep(0.02, 0.25, d.y) * 0.85);
+  // Clouds across the whole sky: rose-gold bodies, gold where they face the sun (density sampled a step toward it is
+  // lower there), lavender-grey in their shadowed undersides, glowing near the sun; thinning into the horizon haze.
+  float body = clouds(d);
+  float c = smoothstep(0.46, 0.62, body);
+  float lit = clamp((body - clouds(normalize(d + uSun * 0.035))) * 6.0 + 0.5, 0.0, 1.0);
+  vec3 cloud = mix(uCloudShade, uCloudLit, lit);
+  cloud = mix(cloud, uCloudShade * 0.85, smoothstep(0.62, 0.8, body) * (1.0 - lit) * 0.6);
+  cloud += uGlow * (pow(toward, 3.0) * 0.7 + pow(toward, 14.0) * 0.9) * (0.4 + lit);
+  sky = mix(sky, cloud, c * smoothstep(-0.01, 0.08, d.y));
+  if (uDebug > 0.5) sky = vec3(c, body, lit);
   gl_FragColor = vec4(sky, uOpacity);
   #include <colorspace_fragment>
 }`;
@@ -84,6 +101,8 @@ export function Sky({ sun }: { sun: Mesh | null }) {
           uCloudLit: { value: CLOUD_LIT },
           uCloudShade: { value: CLOUD_SHADE },
           uTime: { value: 0 },
+          // Dev: ?skydebug shows the cloud mask (red), raw noise (green) and height (blue).
+          uDebug: { value: process.env.NODE_ENV === 'development' && window.location.search.includes('skydebug') ? 1 : 0 },
           uSun: { value: SUN_POSITION.clone().normalize() },
           uOpacity: { value: 0 },
         },
@@ -118,12 +137,18 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     const among = smoothstep(BEATS.open, BEATS.fogIn, f);
     const lake = smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], f);
     const away = smoothstep(820, 900, f);
-    fog.near = lerp(lerp(1000, 0.8, among), 6, lake) + away * 20;
-    fog.far = lerp(lerp(2000, 5.5, among), 95, lake) + away * 120;
+    fog.near = lerp(lerp(1000, 0.8, among), 18, lake) + away * 20;
+    fog.far = lerp(lerp(2000, 5.5, among), 170, lake) + away * 120;
     fog.color.copy(PLASTER).lerp(SKY_HORIZON, bloom);
 
     // Low, warm, behind the scene at the landing: it rims the reeds, the frog and the spray.
-    if (light.current) light.current.intensity = bloom * (0.9 + 1.3 * smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], f));
+    if (light.current) {
+      const landing = smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], f);
+      light.current.intensity = bloom * (0.9 + 1.1 * landing);
+      // At the landing the light is cheated round to rake across the cliff faces from the left (as in the reference),
+      // while the sun itself stays where it's seen, low over the saddle.
+      light.current.position.lerpVectors(SUN_POSITION, LANDING_LIGHT, landing);
+    }
     if (sun) {
       const m = sun.material as { opacity: number };
       m.opacity = bloom;

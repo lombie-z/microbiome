@@ -8,17 +8,20 @@ import {
   type DirectionalLight,
   DoubleSide,
   type Euler,
+  type HemisphereLight,
   type Material,
   type Mesh,
   MeshBasicMaterial,
-  type MeshPhysicalMaterial,
+  MeshPhysicalMaterial,
   type Object3D,
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, journey, smoothstep } from '@/lib/journey';
+import { BEATS, journey, landingAt, smoothstep } from '@/lib/journey';
+import { FallStreaks } from './fall-streaks';
+import { rockMaterial } from './rock';
 import { SilhouetteOutline } from './silhouette-outline';
-import { bloomAt } from './sky';
+import { bloomAt, SUN_POSITION } from './sky';
 import { Spray } from './spray';
 import { useStudioReflections } from './studio-environment';
 import { waterMaterial, waterTime } from './water';
@@ -127,6 +130,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   const rainbow = useRef<ShaderMaterial | null>(null);
   const cloudMaterials = useRef(new Map<Material, Material>());
   const key = useRef<DirectionalLight>(null);
+  const hemi = useRef<HemisphereLight>(null);
   const sun = useRef<Mesh | null>(null);
 
   // Give the sky parts their web materials (water shaders, whiteout clouds, the rainbow and the sun for the rays).
@@ -151,7 +155,19 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         // The lake is drawn by <Lake> (a reflector); the spray particles stand in for Blender's splash beads.
         mesh.visible = false;
       } else if (own.name === 'Foreground') mesh.material = swaying(own);
-      else if (name.startsWith('Fall')) {
+      else if (own.name === 'Canyon') mesh.material = rockMaterial(own);
+      else if (own.name === 'Dew') {
+        // Beads of water on the lily pads: clear and glossy, so the low sun glints in them.
+        mesh.material = new MeshPhysicalMaterial({
+          color: '#3d5a34',
+          roughness: 0.12,
+          clearcoat: 1,
+          clearcoatRoughness: 0.12,
+          transparent: true,
+          opacity: 0.55,
+          envMapIntensity: 2.5,
+        });
+      } else if (name.startsWith('Fall')) {
         mesh.material = falling;
         mesh.renderOrder = 2;
       } else if (name.startsWith('SkyCloud')) {
@@ -172,6 +188,10 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
           fog: false,
           toneMapped: false,
         });
+        // Raised a little from Blender's placement so it clears the hill on the landing's left.
+        mesh.position.copy(SUN_POSITION);
+        // A small, intense disc (as in the reference), not a wall of light.
+        mesh.scale.setScalar(0.22);
         sun.current = mesh;
       }
     });
@@ -241,8 +261,13 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       rainbow.current.visible = bow > 0.001;
     }
     // The studio key gives way to the warm sun (components/three/sky.tsx) below the clouds.
-    if (key.current) key.current.intensity = 1.8 - 0.7 * bloomAt(journey.frame);
-    const clouds = smoothstep(30, 110, journey.frame);
+    // The studio lights give way to the warm sun (components/three/sky.tsx): partly below the clouds, almost wholly at
+    // the landing, where the light should be low, warm and contrasty.
+    const landing = landingAt(journey.frame);
+    if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
+    if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
+    // The clay clouds belong to the toy world above; they fade as the camera reaches the real one.
+    const clouds = smoothstep(30, 110, journey.frame) * (1 - smoothstep(600, 690, journey.frame));
     for (const m of cloudMaterials.current.values()) {
       m.opacity = clouds;
       m.visible = clouds > 0.001;
@@ -276,7 +301,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
 
   return (
     <>
-      <hemisphereLight args={['#fffaf2', '#e3d6c6', 0.9]} />
+      <hemisphereLight ref={hemi} args={['#fffaf2', '#e3d6c6', 0.9]} />
       <directionalLight
         ref={key}
         position={[-3, 6, 4]}
@@ -293,6 +318,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       />
       <primitive object={scene} />
       {!(process.env.NODE_ENV === 'development' && window.location.search.includes('nospray')) && <Spray scene={scene} />}
+      <FallStreaks />
       <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>
   );

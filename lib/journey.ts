@@ -41,3 +41,6 @@ export const smoothstep = (edge0: number, edge1: number, x: number) => {
 
 /** Phones and tablets get a lighter render: fewer particles, no light rays, lower resolution. */
 export const isLightDevice = () => typeof window !== 'undefined' && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
+
+/** 0 until the camera nears the lake, 1 at the landing: the landing's own light, haze and grade blend in on this. */
+export const landingAt = (frame: number) => smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], frame);

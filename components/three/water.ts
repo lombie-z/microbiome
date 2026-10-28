@@ -102,8 +102,13 @@ ${NOISE}`
   float churn = smoothstep(0.35, 0.65, waterNoise(vec2(vFlowUv.x * 22.0, (along - uTime * 1.2) * 5.0)));
   white = max(streak, vFoam * churn);
   // The big fall turns white as it drops: aerated water, as in a real fall.
-  float aerated = smoothstep(-6.5, -10.8, vWorld.y) * vFlow;
-  white = max(white, aerated * mix(0.35, 0.95, churn));
+  // Below the braid it's a white, streaming curtain: fine vertical streaks racing down, nearly opaque.
+  float aerated = smoothstep(-5.0, -8.0, vWorld.y) * vFlow;
+  float fine = waterNoise(vec2(vFlowUv.x * 40.0, (along - uTime * 2.6) * 0.6)) * 0.7 + waterNoise(vec2(vFlowUv.x * 110.0, (along - uTime * 3.4) * 1.5)) * 0.3;
+  float streaks = smoothstep(0.32, 0.68, fine);
+  white = max(white, aerated * streaks);
+  // Between the streaks the curtain is thinner and shadowed: a cool grey you can half see through.
+  water = mix(water, vec3(0.62, 0.66, 0.72), aerated * (1.0 - streaks) * 0.8);
 #endif
 #ifdef POOL
   // Rings spreading out from where the big fall lands.
@@ -113,6 +118,17 @@ ${NOISE}`
 #endif
   diffuseColor.rgb = mix(water, vec3(0.95, 0.98, 1.0), white);
   diffuseColor.a = mix(mix(0.95, 0.85, vFlow), 1.0, white) * vFade;
+#ifdef FALLING
+  // The streak particles (components/three/fall-streaks.tsx) carry the curtain; the mesh is a faint sheet behind.
+  diffuseColor.a *= mix(1.0, mix(0.2, 0.45, streaks), aerated);
+  // Sunlit streaks glow past white, so the bloom gives the curtain its luminous edge.
+  totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * aerated * streaks * 0.45;
+  // Ragged, broken edges where the curtain is seen edge-on: it frays into separate streams rather than ending in a
+  // clean silhouette.
+  float rim = 1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0);
+  float fray = waterNoise(vec2(vFlowUv.x * 60.0, (along - uTime * 2.2) * 0.8));
+  diffuseColor.a *= 1.0 - smoothstep(0.55, 0.9, rim) * smoothstep(0.35, 0.65, fray) * aerated;
+#endif
   // White water glows a touch past 1 so the bloom catches it.
   totalEmissiveRadiance += vec3(0.95, 0.98, 1.0) * white * 0.18;
 }`

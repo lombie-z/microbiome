@@ -18,6 +18,7 @@ attribute float aPhase;
 attribute float aLife;
 attribute float aSize;
 varying float vAlpha;
+varying float vSeed;
 void main() {
   float t = fract(uTime / aLife + aPhase) * aLife;
   float k = t / aLife;
@@ -27,6 +28,7 @@ void main() {
   // Size in world units, so near drops are big and far ones are specks.
   gl_PointSize = aSize * uScale * projectionMatrix[1][1] / -mv.z;
   vAlpha = sin(3.14159 * k) * smoothstep(0.03, 0.4, -mv.z);
+  vSeed = aPhase * 37.0;
 }`;
 
 const fragmentShader = /* glsl */ `
@@ -34,9 +36,22 @@ uniform vec3 uColor;
 uniform float uOpacity;
 uniform float uSoftness;
 varying float vAlpha;
+varying float vSeed;
+float sHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float sNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(sHash(i), sHash(i + vec2(1, 0)), u.x), mix(sHash(i + vec2(0, 1)), sHash(i + vec2(1, 1)), u.x), u.y);
+}
 void main() {
   float d = length(gl_PointCoord - 0.5) * 2.0;
   float a = 1.0 - smoothstep(1.0 - uSoftness, 1.0, d);
+  // Soft sprites (mist) get billows: noise inside the disc, each particle its own.
+  if (uSoftness > 0.9) {
+    vec2 q = gl_PointCoord * 3.0 + vSeed;
+    float b = sNoise(q) * 0.6 + sNoise(q * 2.3) * 0.3 + sNoise(q * 5.1) * 0.1;
+    a *= smoothstep(0.25, 0.75, b + (1.0 - d) * 0.35);
+  }
   gl_FragColor = vec4(uColor, a * vAlpha * uOpacity);
   #include <colorspace_fragment>
 }`;
@@ -115,7 +130,10 @@ function fallSurface(scene: Object3D) {
 }
 
 const POOL_Y = -11;
-const FALL_FOOT = 1.05;
+// The big fall's foot (art/build-spill.py): a curtain about 3 deep (x) and 7.7 wide (z) where it meets the pool.
+const FALL_FOOT = 3.2;
+const FOOT_X = 0.45;
+const FOOT_Z = 1.15;
 const BRAID_Y = -6.5;
 
 export function Spray({ scene }: { scene: Object3D }) {
@@ -161,16 +179,16 @@ export function Spray({ scene }: { scene: Object3D }) {
       }),
       // Mist off the pool, rising and spreading slowly.
       particles({
-        count: 220,
+        count: 300,
         gravity: 0,
-        color: '#fff2e2',
-        opacity: 0.22,
+        color: '#fff0e2',
+        opacity: 0.2,
         softness: 1,
         emit: (_, start, velocity) => {
           // A great billowing cloud of mist at the fall's foot, rolling up and out over the lake.
           const a = Math.random() * Math.PI * 2;
-          const r = FALL_FOOT * 0.5 + Math.random() * 3.2;
-          start.set(Math.cos(a) * r, POOL_Y + 0.05 + Math.random() * 0.6, Math.sin(a) * r);
+          const r = FALL_FOOT * 0.6 + Math.random() * 3.5;
+          start.set(Math.cos(a) * r * 0.7, POOL_Y + 0.05 + Math.random() * 0.8, Math.sin(a) * r * 1.1);
           velocity.set(Math.cos(a) * 0.18, 0.2 + Math.random() * 0.3, Math.sin(a) * 0.18);
           return { life: 6 + Math.random() * 5, size: 2 + Math.random() * 2.5 };
         },

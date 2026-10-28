@@ -18,7 +18,7 @@ POOL_Z = -11.0  # surface of the pool the falls land in
 # Below the cloud layer the falls slowly bend together and braid (MERGE_TOP to MERGE_Z). Over the last stretch they
 # fade out as one big fall fades in around them (MAIN_TOP down to the pool), so there's no hard join.
 MERGE_TOP, MERGE_Z, MAIN_TOP = -2.1, -7.0, -5.6
-SPREAD = 1.0  # how much wider the big fall gets by the time it reaches the pool
+SPREAD = 2.0  # how much wider the big fall gets by the time it reaches the pool
 STREAMS_FADE = (-6.0, -7.0)  # streams go from opaque to gone between these heights
 MAIN_FADE = (-5.6, -6.8)  # the big fall goes from gone to opaque
 # (name, outward face normal, position along the face, half-width, gap floor z). A and B face the hero camera; C is
@@ -475,13 +475,17 @@ def main_fall(name, material, ring=48):
         else:
             radius = lerp(0.3, 0.42, ease((h - 0.3) / (MAIN_TOP - bottom - 0.3)))
         # Below the braid it spreads as it falls, so it holds its own against the giant biome it lands in.
-        radius += SPREAD * max(0.0, (MERGE_Z - z) / (MERGE_Z - bottom)) ** 1.6
+        # It opens out quickly just below the braid, then drops almost straight at full width: a curtain, not a skirt.
+        radius += SPREAD * (ease((MERGE_Z - z) / 1.4) * 0.85 + 0.15 * max(0.0, (MERGE_Z - z) / (MERGE_Z - bottom)))
         centre = Vector((noise.noise(Vector((z * 0.6, 4.2, 0))) * 0.04, noise.noise(Vector((z * 0.6, 7.7, 0))) * 0.04, z))
         ring_verts = []
         for j in range(ring):
             a = 2 * math.pi * j / ring
             ridge = 1 + 0.07 * noise.noise(Vector((math.cos(a) * 2.2, math.sin(a) * 2.2, z * 0.7)))
-            ring_verts.append(centre + Vector((math.cos(a), math.sin(a), 0)) * radius * ridge)
+            # A curtain more than a column: wider across the landing's view (y) than it is deep (x), increasingly so as it
+            # spreads, like the reference's fall.
+            wide = 1 + 0.6 * ease((MERGE_Z - z) / 1.4)
+            ring_verts.append(centre + Vector((math.cos(a) / wide, math.sin(a) * wide, 0)) * radius * ridge)
         rings.append(ring_verts)
         lengths.append(length)
         foam.append(max(1 - ease(h / 0.6), max(0.0, 1 - (z - bottom) / 0.35)))

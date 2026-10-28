@@ -285,12 +285,18 @@ bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 
 # Lily pads: a field reaching away on the left, the frog's pad big and close.
-PAD = Color((0.33, 0.48, 0.2))
-PAD_EDGE = Color((0.55, 0.5, 0.22))
+PAD = Color((0.15, 0.3, 0.09))
+PAD_VEIN = Color((0.36, 0.5, 0.2))
+PAD_EDGE = Color((0.55, 0.42, 0.16))
 
 
 def lily_pad(centre, r, spin):
-    geom = bmesh.ops.create_circle(bm, cap_ends=True, segments=36, radius=r)
+    geom = bmesh.ops.create_circle(bm, cap_ends=True, segments=72, radius=r)
+    # A fan of triangles from a centre point, so the radial veins have vertices to colour.
+    rim = set(geom['verts'])
+    cap = [f for f in bm.faces if set(f.verts) <= rim]
+    poked = bmesh.ops.poke(bm, faces=cap)
+    geom['verts'] = list(rim) + [v for v in poked['verts']]
     for v in geom['verts']:
         a = math.atan2(v.co.y, v.co.x)
         if abs(a) < 0.18:
@@ -299,7 +305,13 @@ def lily_pad(centre, r, spin):
         x, y = v.co.x, v.co.y
         v.co.x, v.co.y = x * math.cos(spin) - y * math.sin(spin), x * math.sin(spin) + y * math.cos(spin)
         v.co += centre
-    colour_faces(geom['verts'], col, lambda co: mix(PAD, PAD_EDGE, smoothstep(0.6, 1.0, (co.xy - centre.xy).length / r) * 0.6))
+    def pad_colour(co):
+        d = co.xy - centre.xy
+        vein = abs(math.sin(math.atan2(d.y, d.x) * 9 - spin * 9)) ** 24  # radial veins
+        c = mix(PAD, PAD_VEIN, vein * 0.7 + noise.noise(co * 9) * 0.15)
+        return mix(c, PAD_EDGE, smoothstep(0.82, 1.0, d.length / r) * 0.7)
+
+    colour_faces(geom['verts'], col, pad_colour)
 
 
 FROG_PAD = Vector((-25.0, -2.05, LAKE_Z + 0.015))
@@ -333,8 +345,8 @@ for centre in (Vector((-25.9, -0.9, LAKE_Z + 0.03)), Vector((-22.5, 0.6, LAKE_Z 
     colour_faces(geom['verts'], col, solid(HEART))
 
 # The frog on its pad, side-on to the camera, looking right toward the fall.
-FROG = Color((0.5, 0.52, 0.26))
-FROG_DARK = Color((0.32, 0.34, 0.16))
+FROG = Color((0.47, 0.44, 0.22))
+FROG_DARK = Color((0.26, 0.24, 0.12))
 FROG_BELLY = Color((0.88, 0.85, 0.62))
 EYE_GOLD = Color((0.85, 0.6, 0.2))
 frog_at = FROG_PAD + Vector((0.05, 0.0, 0.005))
@@ -369,7 +381,7 @@ for side in (-1, 1):
     frog_part((0.13, 0.07 * side, 0.03), (0.025, 0.02, 0.05), mottled)  # front leg
 
 # Cattails and tall grass, towering up the right of the frame.
-REED = Color((0.36, 0.52, 0.2))
+REED = Color((0.2, 0.36, 0.11))
 REED_DRY = Color((0.62, 0.58, 0.28))
 CATTAIL = Color((0.5, 0.3, 0.14))
 
@@ -411,17 +423,18 @@ for i in range(7):
     colour_faces(geom['verts'], col, solid(CATTAIL))
 
 # Big smooth pebbles in the bottom right, glistening wet (on the site).
-STONE = Color((0.8, 0.68, 0.6))
-STONE_DARK = Color((0.55, 0.45, 0.4))
+STONE = Color((0.72, 0.6, 0.52))
+STONE_DARK = Color((0.38, 0.3, 0.27))
 for i in range(26):
     r = rnd.uniform(0.07, 0.2)
     centre = Vector((rnd.uniform(-26.2, -24.2), rnd.uniform(-3.6, -2.75), LAKE_Z + r * 0.1))
-    geom = bmesh.ops.create_uvsphere(bm, u_segments=20, v_segments=12, radius=1)
+    geom = bmesh.ops.create_uvsphere(bm, u_segments=28, v_segments=16, radius=1)
     for v in geom['verts']:
         v.co = Vector((v.co.x * r * 1.2, v.co.y * r, v.co.z * r * 0.7))
         v.co += v.co.normalized() * noise.noise(v.co * 5 + centre) * r * 0.08
         v.co += centre
-    colour_faces(geom['verts'], col, lambda co: mix(STONE, STONE_DARK, smoothstep(-0.2, 0.5, noise.noise(co * 8))))
+    # Mottled and speckled.
+    colour_faces(geom['verts'], col, lambda co: mix(STONE, STONE_DARK, max(smoothstep(-0.2, 0.5, noise.noise(co * 8)) * 0.6, smoothstep(0.55, 0.7, noise.noise(co * 60)))))
 
 me = bpy.data.meshes.new('Landing.Foreground')
 bm.to_mesh(me)
@@ -430,3 +443,25 @@ for p in me.polygons:
     p.use_smooth = True
 me.materials.append(FG)
 link('Landing.Foreground', me)
+
+# Dew drops beading on the lily pads: glossy beads the low sun glints in (their own material, 'Dew', on the site).
+bm = bmesh.new()
+for i in range(70):
+    a = rnd.uniform(0, 6.28)
+    d = rnd.uniform(0.05, 0.38)
+    centre = FROG_PAD + Vector((math.cos(a) * d, math.sin(a) * d, 0.012))
+    if (centre.xy - frog_at.xy).length < 0.16:
+        continue
+    size = rnd.uniform(0.003, 0.01)
+    geom = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=size)
+    for v in geom['verts']:
+        v.co.z *= 0.6
+        v.co += centre + Vector((0, 0, size * 0.4))
+me = bpy.data.meshes.new('Landing.Dew')
+bm.to_mesh(me)
+bm.free()
+for p in me.polygons:
+    p.use_smooth = True
+dew = bpy.data.materials.get('Dew') or bpy.data.materials.new('Dew')
+me.materials.append(dew)
+link('Landing.Dew', me)

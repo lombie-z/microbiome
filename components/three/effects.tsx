@@ -5,7 +5,8 @@ import { Bloom, EffectComposer, GodRays, Noise, Vignette } from '@react-three/po
 import { BlendFunction, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
 import { type Mesh, ShaderChunk } from 'three';
-import { journey, smoothstep } from '@/lib/journey';
+import { journey, landingAt, smoothstep } from '@/lib/journey';
+import { Grade, type GradeEffect } from './grade';
 import { bloomAt } from './sky';
 
 // Every built-in material ends with this chunk: keep its output finite and in range. The effects render to a
@@ -24,12 +25,14 @@ gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(16.0));`;
 export function Effects({ sun, multisampling }: { sun: Mesh | null; multisampling: number }) {
   const vignette = useRef<VignetteEffect>(null);
   const grain = useRef<NoiseEffect>(null);
+  const grade = useRef<GradeEffect>(null);
 
   useFrame(() => {
     const underway = smoothstep(10, 120, journey.frame);
     const bloom = bloomAt(journey.frame);
     if (vignette.current) vignette.current.darkness = 0.18 * underway + 0.12 * bloom;
     if (grain.current) grain.current.blendMode.opacity.value = 0.05 * underway;
+    if (grade.current) grade.current.weight = landingAt(journey.frame);
   });
 
   return (
@@ -37,9 +40,10 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
       <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
       <>
         {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
-          <GodRays sun={sun} samples={48} density={0.96} decay={0.92} weight={0.45} exposure={0.5} clampMax={1} blur />
+          <GodRays sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
         )}
       </>
+      <Grade ref={grade} />
       <Vignette ref={vignette} offset={0.35} darkness={0} />
       <Noise ref={grain} premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0} />
     </EffectComposer>
