@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Instrument_Sans, Newsreader } from 'next/font/google';
-import { SmoothScroll } from '@/components/smooth-scroll';
 import { cn } from '@/lib/utils';
 import './globals.css';
 
@@ -15,10 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={cn(instrument.variable, newsreader.variable)}>
-      <body>
-        <SmoothScroll />
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

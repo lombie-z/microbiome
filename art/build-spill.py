@@ -524,7 +524,7 @@ def splash(name, at, seed, material, scale=1.0):
         a = rnd.uniform(0, 2 * math.pi)
         r = rnd.uniform(0.08, 0.24) * scale
         size = rnd.uniform(0.03, 0.075) * (1 + 0.4 * (scale - 1))
-        geom = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=size)
+        geom = bmesh.ops.create_icosphere(bm, subdivisions=1, radius=size)
         bmesh.ops.translate(bm, vec=at + Vector((math.cos(a) * r, math.sin(a) * r, rnd.uniform(0.0, 0.12) * scale)), verts=geom['verts'])
     for radius in (0.26 * scale, 0.42 * scale, 0.6 * scale):
         geom = bmesh.ops.create_circle(bm, segments=64, radius=radius)

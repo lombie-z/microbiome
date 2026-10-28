@@ -1,7 +1,7 @@
 'use client';
 
 import { useGLTF } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import {
   AdditiveBlending,
@@ -169,7 +169,33 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   }, [scene]);
 
   useStudioReflections(scene, 0.8);
-  useEffect(onReady, [onReady]);
+  // Compile every shader up front (with everything shown, so the sun, clouds and rainbow that appear later are
+  // included), then report ready once a frame has drawn: no stalls mid-scroll when something first comes into view.
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const threeScene = useThree((s) => s.scene);
+  useEffect(() => {
+    let live = true;
+    const hidden: Object3D[] = [];
+    threeScene.traverse((o) => {
+      if (!o.visible) {
+        o.visible = true;
+        hidden.push(o);
+      }
+    });
+    const opacities = [...cloudMaterials.current.values()].map((m) => [m, m.visible] as const);
+    for (const [m] of opacities) m.visible = true;
+    gl.compileAsync(threeScene, camera)
+      .catch(() => {})
+      .then(() => {
+        for (const o of hidden) o.visible = false;
+        for (const [m, visible] of opacities) m.visible = visible;
+        requestAnimationFrame(() => requestAnimationFrame(() => live && onReady()));
+      });
+    return () => {
+      live = false;
+    };
+  }, [gl, camera, threeScene, onReady]);
   useEffect(() => {
     if (sun.current) onSun(sun.current);
   }, [onSun]);

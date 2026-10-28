@@ -10,7 +10,7 @@ STILL = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome.png')
 # Silhouette without the lettering, for the sticker outline (composited by art/outline-still.sh).
 STILL_MASK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-mask.png')
 STILL_BACK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-back.png')
-DECIMATE = {'Cloud': 0.3, 'Letter': 0.45, 'Word': 0.45, 'Spire': 0.6, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.06, 'Basin': 0.12, 'SkyCloud': 0.08}
+DECIMATE = {'Cloud': 0.3, 'Letter': 0.15, 'Word': 0.15, 'Spire': 0.3, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.04, 'Basin': 0.035, 'SkyCloud': 0.06}
 # Point attributes the site's water shader reads (glTF only carries custom attributes named with a leading underscore).
 WATER_ATTRIBUTES = ('flow', 'foam', 'fade')
 
