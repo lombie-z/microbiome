@@ -1,0 +1,94 @@
+'use client';
+
+import { PerspectiveCamera } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { useEffect, useRef } from 'react';
+import { MathUtils, type PerspectiveCamera as PerspectiveCameraImpl, Quaternion, Vector3 } from 'three';
+import { heroStageSize, journeyProgress } from '@/lib/journey';
+
+// The hero matches the blog's biome view (and the Blender preview camera): three-quarter, 3.7 units across the stage.
+// A long lens from far away stands in for the blog's orthographic camera, so the journey can widen it.
+const HERO_TARGET = new Vector3(0, 0.92, 0);
+const HERO_DIRECTION = new Vector3(-1, 0.75, 1).normalize();
+const HERO_FRAME = 3.7;
+const HERO_FOV = 6;
+// The track's opening beat (art/build-journey.py F_OPEN / F_END): the fitted hero hands over to it across this beat.
+const OPEN_SHARE = 80 / 600;
+
+/** public/journey.json, exported from JourneyCam by art/export-journey.py: [x, y, z, qx, qy, qz, qw, fov] per frame. */
+type Track = number[][];
+
+const a = new Vector3();
+const b = new Vector3();
+const qa = new Quaternion();
+const qb = new Quaternion();
+const heroPosition = new Vector3();
+const heroQuaternion = new Quaternion();
+
+/** Sample the track at progress p (0-1) into position/quaternion, returning the vertical FOV. */
+function sample(track: Track, p: number, position: Vector3, quaternion: Quaternion) {
+  const f = p * (track.length - 1);
+  const i = Math.min(Math.floor(f), track.length - 2);
+  const t = f - i;
+  const [x0, y0, z0, ax, ay, az, aw, fov0] = track[i];
+  const [x1, y1, z1, bx, by, bz, bw, fov1] = track[i + 1];
+  position.copy(a.set(x0, y0, z0)).lerp(b.set(x1, y1, z1), t);
+  quaternion.copy(qa.set(ax, ay, az, aw)).slerp(qb.set(bx, by, bz, bw), t);
+  return fov0 + (fov1 - fov0) * t;
+}
+
+/** The camera the scroll runs along: the blog's hero framing at the top, then JourneyCam's authored path. */
+export function JourneyCamera() {
+  const camera = useRef<PerspectiveCameraImpl>(null);
+  const track = useRef<Track | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetch('/journey.json')
+      .then((r) => r.json())
+      .then((data: { frames: Track }) => {
+        if (live) track.current = data.frames;
+      })
+      // Without the track the hero simply stays.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useFrame((state) => {
+    const cam = camera.current;
+    if (!cam) return;
+    const { width, height } = state.size;
+
+    // Hero: fit HERO_FRAME world units across the hero stage at the target's distance, whatever the viewport.
+    const visibleHeight = (HERO_FRAME * height) / heroStageSize(width, height);
+    const distance = visibleHeight / (2 * Math.tan(MathUtils.degToRad(HERO_FOV / 2)));
+    heroPosition.copy(HERO_TARGET).addScaledVector(HERO_DIRECTION, distance);
+    cam.position.copy(heroPosition);
+    cam.lookAt(HERO_TARGET);
+    heroQuaternion.copy(cam.quaternion);
+    let fov = HERO_FOV;
+
+    const frames = track.current;
+    if (frames) {
+      const p = journeyProgress();
+      const trackFov = sample(frames, p, cam.position, cam.quaternion);
+      // Hand over from the fitted hero to the authored path across the opening beat.
+      const w = MathUtils.smoothstep(p / OPEN_SHARE, 0, 1);
+      cam.position.lerpVectors(heroPosition, cam.position, w);
+      cam.quaternion.slerpQuaternions(heroQuaternion, cam.quaternion, w);
+      // The track is framed for landscape; on portrait screens widen it so the sides still fit.
+      const aspect = width / height;
+      const fitted = aspect < 1 ? MathUtils.radToDeg(2 * Math.atan(Math.tan(MathUtils.degToRad(trackFov / 2)) / aspect)) : trackFov;
+      fov = MathUtils.lerp(HERO_FOV, fitted, w);
+    }
+
+    cam.fov = fov;
+    cam.near = Math.max(0.03, cam.position.distanceTo(HERO_TARGET) * 0.002);
+    cam.far = 400;
+    cam.updateProjectionMatrix();
+  });
+
+  return <PerspectiveCamera ref={camera} makeDefault />;
+}

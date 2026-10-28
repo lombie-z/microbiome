@@ -1,22 +1,15 @@
 'use client';
 
-import { ContactShadows, PerspectiveCamera, useGLTF } from '@react-three/drei';
+import { ContactShadows, useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
-import { MathUtils, type Mesh, type Object3D, type PerspectiveCamera as PerspectiveCameraImpl, Vector3 } from 'three';
-import { heroStageSize } from '@/lib/journey';
+import { useEffect, useMemo } from 'react';
+import { type Mesh, type Object3D, Vector3 } from 'three';
 import { SilhouetteOutline } from './silhouette-outline';
 import { useStudioReflections } from './studio-environment';
 
 export const DRACO_PATH = '/draco/';
 const URL = '/models/micro-biome.glb';
 
-// The hero matches the blog's biome view (and the Blender preview camera): three-quarter, 3.7 units across the stage.
-// A long lens from far away stands in for the blog's orthographic camera, so the journey can widen it later.
-const TARGET = new Vector3(0, 0.92, 0);
-const VIEW_DIRECTION = new Vector3(-1, 0.75, 1).normalize();
-const FRAME = 3.7;
-const HERO_FOV = 6;
 // The letter ring orbits this point; the sticker band sits at its depth so the ring weaves in front of and behind it.
 const OUTLINE_DEPTH = new Vector3(0, 0.62, 0);
 
@@ -39,7 +32,6 @@ function isOutsideOutline(o: Object3D) {
 
 export function Biome({ onReady }: { onReady: () => void }) {
   const { scene } = useGLTF(URL, DRACO_PATH);
-  const camera = useRef<PerspectiveCameraImpl>(null);
 
   const animated = useMemo(() => {
     const list: Animated[] = [];
@@ -63,20 +55,6 @@ export function Biome({ onReady }: { onReady: () => void }) {
   useEffect(onReady, [onReady]);
 
   useFrame((state) => {
-    const cam = camera.current;
-    if (cam) {
-      // Fit FRAME world units across the hero stage at the target's distance.
-      const { width, height } = state.size;
-      const visibleHeight = (FRAME * height) / heroStageSize(width, height);
-      const distance = visibleHeight / (2 * Math.tan(MathUtils.degToRad(HERO_FOV / 2)));
-      cam.fov = HERO_FOV;
-      cam.near = distance - 6;
-      cam.far = distance + 6;
-      cam.position.copy(TARGET).addScaledVector(VIEW_DIRECTION, distance);
-      cam.lookAt(TARGET);
-      cam.updateProjectionMatrix();
-    }
-
     const t = state.clock.elapsedTime;
     for (const a of animated) {
       const { node, base, i } = a;
@@ -107,7 +85,6 @@ export function Biome({ onReady }: { onReady: () => void }) {
 
   return (
     <>
-      <PerspectiveCamera ref={camera} makeDefault />
       <hemisphereLight args={['#fffaf2', '#e3d6c6', 0.9]} />
       <directionalLight
         position={[-3, 6, 4]}
