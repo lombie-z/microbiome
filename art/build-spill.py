@@ -132,33 +132,114 @@ planter.modifiers['Cuts'].collection = cutters
 # --- Waterfalls -------------------------------------------------------------------------------------------------------
 
 
-def waterfall_material():
-    """The biome's water blue, a touch lighter, with foam streaks running down the fall (UV v = metres along it)."""
-    mat = bpy.data.materials.get('Waterfall') or bpy.data.materials.new('Waterfall')
-    mat.use_nodes = True
-    nt = mat.node_tree
-    nt.nodes.clear()
+def water_materials():
+    """Stylised water that ports straight to a web shader: a deep blue core paling to the edges (facing ratio), glossy,
+    slightly see-through, with lengthwise ridges in the normals. The falls mix in broken white water from their 'foam'
+    attribute (the lip and the splash) and thin streaks running down them. One look for planter, falls and pool."""
+
+    def setup(mat, cull=True):
+        mat.use_nodes = True
+        mat.surface_render_method = 'BLENDED'
+        mat.use_backface_culling = cull
+        mat.node_tree.nodes.clear()
+        return mat.node_tree
+
+    def glossy(nt, alpha):
+        bsdf = nt.nodes.new('ShaderNodeBsdfPrincipled')
+        bsdf.inputs['Roughness'].default_value = 0.04
+        bsdf.inputs['Coat Weight'].default_value = 1.0
+        bsdf.inputs['Coat Roughness'].default_value = 0.02
+        bsdf.inputs['Specular IOR Level'].default_value = 0.7
+        bsdf.inputs['Alpha'].default_value = alpha
+        return bsdf
+
+    def edge_ramp(nt, stops, blend):
+        facing = nt.nodes.new('ShaderNodeLayerWeight')
+        facing.inputs['Blend'].default_value = blend
+        ramp = nt.nodes.new('ShaderNodeValToRGB')
+        ramp.color_ramp.elements[0].position, ramp.color_ramp.elements[0].color = stops[0][0], (*stops[0][1], 1)
+        ramp.color_ramp.elements[1].position, ramp.color_ramp.elements[1].color = stops[-1][0], (*stops[-1][1], 1)
+        for pos, rgb in stops[1:-1]:
+            ramp.color_ramp.elements.new(pos).color = (*rgb, 1)
+        nt.links.new(facing.outputs['Facing'], ramp.inputs['Fac'])
+        return ramp
+
+    def noise(nt, scale, uv_stretch=None, detail=2.0):
+        tex = nt.nodes.new('ShaderNodeTexNoise')
+        tex.inputs['Scale'].default_value = scale
+        tex.inputs['Detail'].default_value = detail
+        if uv_stretch:
+            uv = nt.nodes.new('ShaderNodeUVMap')
+            mapping = nt.nodes.new('ShaderNodeMapping')
+            mapping.inputs['Scale'].default_value = uv_stretch
+            nt.links.new(uv.outputs['UV'], mapping.inputs['Vector'])
+            nt.links.new(mapping.outputs['Vector'], tex.inputs['Vector'])
+        return tex
+
+    def bump(nt, tex, strength, bsdf):
+        node = nt.nodes.new('ShaderNodeBump')
+        node.inputs['Strength'].default_value = strength
+        nt.links.new(tex.outputs['Fac'], node.inputs['Height'])
+        nt.links.new(node.outputs['Normal'], bsdf.inputs['Normal'])
+        nt.links.new(node.outputs['Normal'], bsdf.inputs['Coat Normal'])
+
+    deep, mid, pale = (0.02, 0.22, 0.8), (0.1, 0.45, 1.0), (0.72, 0.9, 1.0)
+
+    # Still water: planter and pool.
+    still = bpy.data.materials['Water']
+    nt = setup(still)
     out = nt.nodes.new('ShaderNodeOutputMaterial')
-    bsdf = nt.nodes.new('ShaderNodeBsdfPrincipled')
-    bsdf.inputs['Roughness'].default_value = 0.08
-    bsdf.inputs['Coat Weight'].default_value = 1.0
-    uv = nt.nodes.new('ShaderNodeUVMap')
-    mapping = nt.nodes.new('ShaderNodeMapping')
-    mapping.inputs['Scale'].default_value = (6, 0.9, 1)
-    tex = nt.nodes.new('ShaderNodeTexNoise')
-    tex.inputs['Scale'].default_value = 3.0
-    tex.inputs['Detail'].default_value = 1.0
-    ramp = nt.nodes.new('ShaderNodeValToRGB')
-    ramp.color_ramp.elements[0].position = 0.55
-    ramp.color_ramp.elements[0].color = (0.09, 0.29, 0.86, 1)
-    ramp.color_ramp.elements[1].position = 0.68
-    ramp.color_ramp.elements[1].color = (0.75, 0.86, 1.0, 1)
-    nt.links.new(uv.outputs['UV'], mapping.inputs['Vector'])
-    nt.links.new(mapping.outputs['Vector'], tex.inputs['Vector'])
-    nt.links.new(tex.outputs['Fac'], ramp.inputs['Fac'])
+    bsdf = glossy(nt, 0.9)
+    ramp = edge_ramp(nt, [(0.0, deep), (0.9, mid), (1.0, pale)], 0.15)
     nt.links.new(ramp.outputs['Color'], bsdf.inputs['Base Color'])
+    bump(nt, noise(nt, 9.0), 0.15, bsdf)
     nt.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
-    return mat
+
+    # Falling water.
+    falling = bpy.data.materials.get('Waterfall') or bpy.data.materials.new('Waterfall')
+    nt = setup(falling)
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    bsdf = glossy(nt, 0.85)
+    ramp = edge_ramp(nt, [(0.0, deep), (0.55, mid), (1.0, pale)], 0.3)
+    ridges = noise(nt, 2.5, uv_stretch=(10, 0.7, 1))
+    bump(nt, ridges, 0.45, bsdf)
+    # White: the brightest ridges, and the foam attribute broken up by finer noise so it never reads as a solid band.
+    streak = nt.nodes.new('ShaderNodeMapRange')
+    streak.inputs['From Min'].default_value = 0.58
+    streak.inputs['From Max'].default_value = 0.72
+    streak.inputs['To Max'].default_value = 0.6
+    nt.links.new(ridges.outputs['Fac'], streak.inputs['Value'])
+    foam = nt.nodes.new('ShaderNodeAttribute')
+    foam.attribute_name = 'foam'
+    breakup = nt.nodes.new('ShaderNodeMapRange')
+    breakup.inputs['From Min'].default_value = 0.4
+    breakup.inputs['From Max'].default_value = 0.6
+    nt.links.new(noise(nt, 6.0, uv_stretch=(8, 3, 1)).outputs['Fac'], breakup.inputs['Value'])
+    broken = nt.nodes.new('ShaderNodeMath')
+    broken.operation = 'MULTIPLY'
+    nt.links.new(foam.outputs['Fac'], broken.inputs[0])
+    nt.links.new(breakup.outputs['Result'], broken.inputs[1])
+    white = nt.nodes.new('ShaderNodeMath')
+    white.operation = 'MAXIMUM'
+    nt.links.new(streak.outputs['Result'], white.inputs[0])
+    nt.links.new(broken.outputs['Value'], white.inputs[1])
+    tint = nt.nodes.new('ShaderNodeMix')
+    tint.data_type = 'RGBA'
+    tint.inputs['B'].default_value = (0.95, 0.98, 1.0, 1)
+    nt.links.new(white.outputs['Value'], tint.inputs['Factor'])
+    nt.links.new(ramp.outputs['Color'], tint.inputs['A'])
+    nt.links.new(tint.outputs['Result'], bsdf.inputs['Base Color'])
+    nt.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
+
+    # White water for the splash crowns.
+    spray = bpy.data.materials.get('Foam') or bpy.data.materials.new('Foam')
+    nt = setup(spray, cull=False)
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    bsdf = glossy(nt, 0.92)
+    bsdf.inputs['Base Color'].default_value = (0.92, 0.97, 1.0, 1)
+    bsdf.inputs['Roughness'].default_value = 0.25
+    nt.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
+    return falling, spray
 
 
 def fall_path(n, along, zb, seed):
@@ -184,8 +265,9 @@ def fall_path(n, along, zb, seed):
     return pts
 
 
-def ribbon(name, pts, t_axis, hw, seed, material, ring=16):
-    """A flattened tube along pts. UV u runs around it, v is metres along it (for the scrolling foam)."""
+def ribbon(name, pts, t_axis, hw, seed, material, ring=24):
+    """A flattened tube along pts, rippled lengthwise. UV u runs around it, v is metres along it (for the scrolling
+    flow on the web). A 'foam' point attribute marks the white water: rapids in the gap, the lip, and the splash."""
     bm = bmesh.new()
     uv_layer = bm.loops.layers.uv.new('UVMap')
     lengths = [0.0]
@@ -193,6 +275,8 @@ def ribbon(name, pts, t_axis, hw, seed, material, ring=16):
         lengths.append(lengths[-1] + (pts[i] - pts[i - 1]).length)
     total = lengths[-1]
     rings = []
+    foam = []
+    lip_length = lengths[11]
     for i, p in enumerate(pts):
         tangent = (pts[min(i + 1, len(pts) - 1)] - pts[max(i - 1, 0)]).normalized()
         side = (t_axis - tangent * t_axis.dot(tangent)).normalized()
@@ -205,7 +289,19 @@ def ribbon(name, pts, t_axis, hw, seed, material, ring=16):
             f = lengths[i] / total
             width = hw * 0.8 * (1 + 0.45 * f) * (1 + 0.08 * noise.noise(Vector((lengths[i] * 1.5, seed, 1))))
             thick = 0.022 + 0.05 * min(1, f * 3)
-        rings.append([bm.verts.new(p + side * math.cos(a) * width + up * math.sin(a) * thick) for a in (2 * math.pi * j / ring for j in range(ring))])
+        ring_verts = []
+        for j in range(ring):
+            a = 2 * math.pi * j / ring
+            # Lengthwise ridges, slowly changing as the water falls.
+            ridge = 1 + 0.3 * noise.noise(Vector((math.cos(a) * 1.6, math.sin(a) * 1.6, lengths[i] * 0.7 + seed)))
+            ring_verts.append(bm.verts.new(p + side * math.cos(a) * width * (0.92 + 0.08 * ridge) + up * math.sin(a) * thick * ridge))
+        rings.append(ring_verts)
+        after_lip = lengths[i] - lip_length
+        white = max(
+            max(0.0, 1 - abs(after_lip) / 0.18) if after_lip > -0.06 else 0.0,
+            max(0.0, 1 - (total - lengths[i]) / 0.3),
+        )
+        foam.append(min(1.0, white))
     for i in range(len(rings) - 1):
         for j in range(ring):
             quad = (rings[i][j], rings[i][(j + 1) % ring], rings[i + 1][(j + 1) % ring], rings[i + 1][j])
@@ -220,15 +316,47 @@ def ribbon(name, pts, t_axis, hw, seed, material, ring=16):
     bm.free()
     for poly in me.polygons:
         poly.use_smooth = True
+    attr = me.attributes.new('foam', 'FLOAT', 'POINT')
+    attr.data.foreach_set('value', [foam[i // ring] for i in range(len(me.vertices))])
     me.materials.append(material)
     o = fresh_object(name, me)
     o.parent = root
     return o
 
 
-water_fall = waterfall_material()
+def splash(name, at, seed, material):
+    """Where a fall lands: a crown of white-water beads and rings spreading on the pool."""
+    rnd = random.Random(seed)
+    bm = bmesh.new()
+    for k in range(22):
+        a = k / 14 * 2 * math.pi + rnd.uniform(-0.2, 0.2)
+        r = rnd.uniform(0.08, 0.24)
+        size = rnd.uniform(0.03, 0.075)
+        geom = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=size)
+        bmesh.ops.translate(bm, vec=at + Vector((math.cos(a) * r, math.sin(a) * r, rnd.uniform(0.0, 0.12))), verts=geom['verts'])
+    for radius in (0.26, 0.42, 0.6):
+        geom = bmesh.ops.create_circle(bm, segments=64, radius=radius)
+        ring_edges = [e for e in bm.edges if all(v in geom['verts'] for v in e.verts)]
+        tube = bmesh.ops.extrude_edge_only(bm, edges=ring_edges)
+        new = [v for v in tube['geom'] if isinstance(v, bmesh.types.BMVert)]
+        bmesh.ops.scale(bm, vec=(1 + 0.03 / radius, 1 + 0.03 / radius, 1), verts=new)
+        bmesh.ops.translate(bm, vec=at + Vector((0, 0, 0.004)), verts=geom['verts'] + new)
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    me.materials.append(material)
+    o = fresh_object(name, me)
+    o.parent = root
+    return o
+
+
+water_fall, foam_material = water_materials()
 for i, (name, n, along, hw, zb) in enumerate(GAPS):
-    ribbon(f'Fall.{name}', fall_path(n, along, zb, i * 7.3), along_axis(n), hw, i * 3.1, water_fall)
+    path = fall_path(n, along, zb, i * 7.3)
+    ribbon(f'Fall.{name}', path, along_axis(n), hw, i * 3.1, water_fall)
+    splash(f'Splash.{name}', Vector((path[-1].x, path[-1].y, POOL_Z)), i, foam_material)
 
 
 # --- Pool basin -------------------------------------------------------------------------------------------------------
