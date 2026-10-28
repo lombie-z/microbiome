@@ -10,7 +10,9 @@ STILL = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome.png')
 # Silhouette without the lettering, for the sticker outline (composited by art/outline-still.sh).
 STILL_MASK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-mask.png')
 STILL_BACK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-back.png')
-DECIMATE = {'Cloud': 0.3, 'Letter': 0.45, 'Word': 0.45, 'Spire': 0.6, 'Moss': 0.12, 'Leaf': 0.5}
+DECIMATE = {'Cloud': 0.3, 'Letter': 0.45, 'Word': 0.45, 'Spire': 0.6, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.06, 'Basin': 0.12, 'SkyCloud': 0.08}
+# Point attributes the site's water shader reads (glTF only carries custom attributes named with a leading underscore).
+WATER_ATTRIBUTES = ('flow', 'foam', 'fade')
 
 scene = bpy.context.scene
 root = bpy.data.objects['MicroBiome']
@@ -27,6 +29,10 @@ os.makedirs(os.path.dirname(STILL), exist_ok=True)
 cam_dir = (scene.camera.matrix_world.translation - root.matrix_world.translation).normalized()
 letters = [o for o in root.children_recursive if o.type in {'FONT', 'MESH'} and o.name.startswith(('Letter', 'Word'))]
 back = [o for o in letters if (o.matrix_world.translation - root.matrix_world.translation).dot(cam_dir) < 0]
+# The hero shows the biome and its falls; the sky below (clouds, basin, pool, sun, rainbow) and the spill cutters stay
+# out of the still.
+SKY = ('SkyCloud', 'Basin', 'Pool', 'Splash', 'Sun', 'Rainbow', 'Fall.Main')
+hero = [o for o in root.children_recursive if o.type in {'MESH', 'FONT'} and not o.name.startswith(SKY) and o.name != 'Planter.Source']
 everything = [o for o in scene.objects if o.type in {'MESH', 'FONT'}]
 
 
@@ -38,10 +44,13 @@ def render(path, visible):
 
 
 render(STILL_BACK, set(back))
-render(STILL, set(everything) - set(back))
-render(STILL_MASK, set(everything) - set(letters))
-for o in everything:
+render(STILL, set(hero) - set(back))
+render(STILL_MASK, set(hero) - set(letters) - {o for o in hero if o.name.startswith('Fall')})
+# Everything in the model renders again for the AO bake (the spill cutters aren't part of it and stay hidden).
+for o in root.children_recursive:
     o.hide_render = False
+for o in bpy.data.collections['Cutters'].objects:
+    o.hide_render = True
 
 
 def freeze(o):
@@ -64,6 +73,9 @@ def freeze(o):
     return n
 
 
+# The clean planter kept for editing isn't part of the model.
+bpy.data.objects.remove(bpy.data.objects['Planter.Source'])
+
 meshes = []
 for o in list(root.children_recursive):
     if o.type not in {'MESH', 'FONT'}:
@@ -76,6 +88,9 @@ for o in list(root.children_recursive):
     if not o.name.startswith(('Planter', 'Soil')):
         for p in o.data.polygons:
             p.use_smooth = True
+    for name in WATER_ATTRIBUTES:
+        if name in o.data.attributes:
+            o.data.attributes[name].name = '_' + name
     o.data.color_attributes.active_color = o.data.color_attributes.new('AO', 'BYTE_COLOR', 'CORNER')
     meshes.append(o)
 
@@ -103,5 +118,5 @@ bpy.context.view_layer.objects.active = root
 bpy.ops.export_scene.gltf(filepath=GLB, export_format='GLB', use_selection=True, export_apply=True, export_vertex_color='ACTIVE',
                           export_draco_mesh_compression_enable=True, export_draco_mesh_compression_level=7,
                           export_draco_position_quantization=12, export_draco_normal_quantization=8, export_draco_color_quantization=8,
-                          export_yup=True, export_cameras=False, export_lights=False)
+                          export_yup=True, export_cameras=False, export_lights=False, export_attributes=True)
 print('exported', GLB, os.path.getsize(GLB))

@@ -12,7 +12,9 @@ export function Journey() {
   const onReady = useCallback(() => setReady(true), []);
   return (
     <>
-      <div className="pointer-events-none fixed inset-0 z-0 grid place-items-center" aria-hidden="true">
+      <JourneyCanvas onReady={onReady} />
+      {/* Over the canvas until the 3D is in (the canvas paints its plaster backdrop straight away). */}
+      <div className="pointer-events-none fixed inset-0 z-[2] grid place-items-center" aria-hidden="true">
         {/* Same box as the hero stage (lib/journey.ts heroStageSize). */}
         {/* biome-ignore lint/performance/noImgElement: a fixed-size transparent still; next/image adds nothing here. */}
         <img
@@ -21,7 +23,8 @@ export function Journey() {
           className={cn('aspect-square w-[min(calc(min(640px,100vw)-48px),72svh)] object-contain transition-opacity duration-500', ready && 'opacity-0')}
         />
       </div>
-      <JourneyCanvas onReady={onReady} />
+      {/* Flying through a cloud (driven from components/three/sky.tsx). */}
+      <div id="whiteout" className="pointer-events-none fixed inset-0 z-[3] bg-[#f8f6f3] opacity-0" aria-hidden="true" />
     </>
   );
 }

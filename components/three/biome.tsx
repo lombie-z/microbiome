@@ -1,11 +1,26 @@
 'use client';
 
-import { ContactShadows, useGLTF } from '@react-three/drei';
+import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
-import { type Mesh, type Object3D, Vector3 } from 'three';
+import { useEffect, useMemo, useRef } from 'react';
+import {
+  AdditiveBlending,
+  Color,
+  type DirectionalLight,
+  DoubleSide,
+  type Material,
+  type Mesh,
+  MeshBasicMaterial,
+  type MeshStandardMaterial,
+  type Object3D,
+  ShaderMaterial,
+  Vector3,
+} from 'three';
+import { BEATS, journey, smoothstep } from '@/lib/journey';
 import { SilhouetteOutline } from './silhouette-outline';
+import { bloomAt } from './sky';
 import { useStudioReflections } from './studio-environment';
+import { waterMaterial, waterTime } from './water';
 
 export const DRACO_PATH = '/draco/';
 const URL = '/models/micro-biome.glb';
@@ -25,21 +40,123 @@ function classify(name: string): Animated['kind'] | null {
   return null;
 }
 
-// The lettering tumbles free of the sticker outline; contact shadows aren't part of the object.
+/** A mesh's Blender object name (glTF splits multi-material meshes into children named after their group). */
+const ownerName = (o: Object3D) => (o.parent?.name && o.name !== o.parent.name && o.name.startsWith(o.parent.name) ? o.parent.name : o.name);
+
+// Below the planter: none of it casts shadows or takes part in the sticker outline. (three.js drops the dots from
+// glTF node names, so Blender's Fall.A arrives as FallA.)
+const SKY_PARTS = ['Fall', 'Splash', 'Pool', 'Basin', 'SkyCloud', 'SkyDome', 'Sun', 'Rainbow'];
+const isSkyPart = (name: string) => SKY_PARTS.some((p) => name.startsWith(p));
+
+// The lettering tumbles free of the sticker outline, and the water spills off the sticker.
 function isOutsideOutline(o: Object3D) {
-  return o.name.startsWith('Letter') || o.name.startsWith('Word') || o.name === 'ContactShadows';
+  return o.name.startsWith('Letter') || o.name.startsWith('Word') || isSkyPart(o.name) || isSkyPart(o.parent?.name ?? '');
 }
 
-export function Biome({ onReady }: { onReady: () => void }) {
+/** Clouds stay the biome's clay outside; from inside (their back faces) they glow white, for the fly-through. */
+function whiteoutCloud(source: Material) {
+  const material = source.clone();
+  material.side = DoubleSide;
+  // Faded in (dithered, so no sorting against the water) as the camera leaves the hero.
+  material.alphaHash = true;
+  material.opacity = 0;
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <dithering_fragment>',
+      '#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(0.97, 0.95, 0.93, 1.0);'
+    );
+  };
+  material.customProgramCacheKey = () => 'whiteout-cloud';
+  return material;
+}
+
+/** The rainbow: spectral bands across the arc (u: outer red to inner violet), fading at its edges and feet. */
+function rainbowMaterial() {
+  return new ShaderMaterial({
+    uniforms: { uOpacity: { value: 0 } },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform float uOpacity;
+      varying vec2 vUv;
+      vec3 spectrum(float x) {
+        vec3 c[6] = vec3[6](vec3(1.0, 0.3, 0.3), vec3(1.0, 0.62, 0.25), vec3(1.0, 0.93, 0.35), vec3(0.4, 0.86, 0.45), vec3(0.35, 0.62, 1.0), vec3(0.62, 0.45, 1.0));
+        float f = clamp(x, 0.0, 0.999) * 5.0;
+        int i = int(floor(f));
+        return mix(c[i], c[min(i + 1, 5)], fract(f));
+      }
+      void main() {
+        float along = 1.0 - vUv.y;
+        float a = sin(3.14159 * vUv.x) * sin(3.14159 * along) * uOpacity * 0.55;
+        gl_FragColor = vec4(spectrum(vUv.x) * a * 1.4, a);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+    fog: false,
+  });
+}
+
+export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Mesh) => void }) {
   const { scene } = useGLTF(URL, DRACO_PATH);
+  const rainbow = useRef<ShaderMaterial | null>(null);
+  const cloudMaterials = useRef(new Map<Material, Material>());
+  const key = useRef<DirectionalLight>(null);
+  const sun = useRef<Mesh | null>(null);
+
+  // Give the sky parts their web materials (water shaders, whiteout clouds, the rainbow and the sun for the rays).
+  useMemo(() => {
+    const still = waterMaterial('still');
+    const pool = waterMaterial('pool');
+    const falling = waterMaterial('falling');
+    const clouds = cloudMaterials.current;
+    scene.traverse((child) => {
+      const mesh = child as Mesh;
+      if (!mesh.isMesh) return;
+      const name = ownerName(mesh);
+      // Blender's cloud material glows white inside (the fly-through); glTF carries that out as an emissive glow on
+      // the whole surface. The web does the inside itself (whiteoutCloud), so drop it.
+      const own = mesh.material as MeshStandardMaterial;
+      if (own.name === 'Cloud' && own.emissive) own.emissive.setRGB(0, 0, 0);
+      if (name === 'Water') mesh.material = still;
+      else if (name === 'Pool') mesh.material = pool;
+      else if (name.startsWith('Fall')) {
+        mesh.material = falling;
+        mesh.renderOrder = 2;
+      } else if (name.startsWith('SkyCloud')) {
+        const source = mesh.material as Material;
+        if (!clouds.has(source)) clouds.set(source, whiteoutCloud(source));
+        mesh.material = clouds.get(source) as Material;
+      } else if (name === 'Rainbow') {
+        rainbow.current = rainbowMaterial();
+        mesh.material = rainbow.current;
+        mesh.renderOrder = 3;
+      } else if (name === 'Sun') {
+        // Brighter than white so the bloom catches it; the light rays need it transparent and not writing depth.
+        mesh.material = new MeshBasicMaterial({
+          color: new Color(1.0, 0.72, 0.42).multiplyScalar(3),
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          fog: false,
+          toneMapped: false,
+        });
+        sun.current = mesh;
+      }
+    });
+  }, [scene]);
 
   const animated = useMemo(() => {
     const list: Animated[] = [];
     const counts: Record<string, number> = {};
     scene.traverse((child) => {
       if ((child as Mesh).isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
+        const sky = isSkyPart(ownerName(child));
+        child.castShadow = !sky;
+        child.receiveShadow = !sky;
       }
       const kind = classify(child.name);
       // Only animate the named object nodes, not glTF's per-primitive children.
@@ -53,9 +170,21 @@ export function Biome({ onReady }: { onReady: () => void }) {
 
   useStudioReflections(scene, 0.8);
   useEffect(onReady, [onReady]);
+  useEffect(() => {
+    if (sun.current) onSun(sun.current);
+  }, [onSun]);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
+    waterTime.value += Math.min(delta, 1 / 20);
+    if (rainbow.current) rainbow.current.uniforms.uOpacity.value = smoothstep(BEATS.bowIn, BEATS.bowFull, journey.frame);
+    // The studio key gives way to the warm sun (components/three/sky.tsx) below the clouds.
+    if (key.current) key.current.intensity = 1.8 - 0.7 * bloomAt(journey.frame);
+    const clouds = smoothstep(30, 110, journey.frame);
+    for (const m of cloudMaterials.current.values()) {
+      m.opacity = clouds;
+      m.visible = clouds > 0.001;
+    }
     for (const a of animated) {
       const { node, base, i } = a;
       switch (a.kind) {
@@ -87,6 +216,7 @@ export function Biome({ onReady }: { onReady: () => void }) {
     <>
       <hemisphereLight args={['#fffaf2', '#e3d6c6', 0.9]} />
       <directionalLight
+        ref={key}
         position={[-3, 6, 4]}
         intensity={1.8}
         color="#fff6ea"
@@ -100,10 +230,12 @@ export function Biome({ onReady }: { onReady: () => void }) {
         shadow-camera-bottom={-1.5}
       />
       <primitive object={scene} />
-      <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} />
-      <ContactShadows name="ContactShadows" position={[0, -0.01, 0]} scale={3} blur={2.4} opacity={0.32} far={0.35} resolution={512} color="#6b5a48" />
+      <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>
   );
 }
+
+// The sticker outline belongs to the hero; it lifts away as the camera opens up.
+const outlineFade = () => 1 - smoothstep(10, 60, journey.frame);
 
 if (typeof window !== 'undefined') useGLTF.preload(URL, DRACO_PATH);

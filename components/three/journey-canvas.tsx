@@ -1,26 +1,25 @@
 'use client';
 
 import { SoftShadows } from '@react-three/drei';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { Suspense, useState } from 'react';
+import type { Mesh } from 'three';
 import { Biome } from './biome';
+import { Effects } from './effects';
 import { JourneyCamera } from './journey-camera';
-
-// Any useFrame with a positive priority takes over rendering, and the outline pass needs one; so render last, here.
-function Render() {
-  useFrame(({ gl, scene, camera }) => gl.render(scene, camera), 1);
-  return null;
-}
+import { Sky } from './sky';
 
 export default function JourneyCanvas({ onReady }: { onReady: () => void }) {
+  const [sun, setSun] = useState<Mesh | null>(null);
   return (
-    <Canvas shadows flat dpr={[1, 1.75]} gl={{ antialias: true, alpha: true }} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
+    <Canvas shadows flat dpr={[1, 1.75]} gl={{ antialias: false }} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
       <SoftShadows size={42} samples={24} focus={0.35} />
       <JourneyCamera />
+      <Sky sun={sun} />
       <Suspense fallback={null}>
-        <Biome onReady={onReady} />
+        <Biome onReady={onReady} onSun={setSun} />
       </Suspense>
-      <Render />
+      <Effects sun={sun} />
     </Canvas>
   );
 }

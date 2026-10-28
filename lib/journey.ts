@@ -11,3 +11,33 @@ export function journeyProgress() {
 export function heroStageSize(width: number, height: number) {
   return Math.min(Math.min(640, width) - 48, height * 0.72);
 }
+
+/** The journey's length in track frames (art/build-journey.py F_END); beats below are in the same frames. */
+export const TRACK_FRAMES = 720;
+export const BEATS = {
+  /** End of the opening dolly zoom, where the fitted hero hands over to the authored path. */
+  open: 80,
+  /** Inside the first cloud: the whiteout peaks here. */
+  cloud: 262,
+  cloudSpread: 26,
+  /** Below the clouds the sun comes out and the sky warms. */
+  sunIn: 275,
+  sunFull: 380,
+  /** Fog closes in once the camera is among the falls, and lifts for the pool. */
+  fogIn: 110,
+  fogOut: [560, 640],
+  /** The rainbow over the pool. */
+  bowIn: 540,
+  bowFull: 630,
+} as const;
+
+/** Shared per-frame journey state: written once a frame by JourneyCamera, read by everything else. */
+export const journey = {
+  /** Current track frame (0 to TRACK_FRAMES), smoothed by Lenis. */
+  frame: 0,
+};
+
+export const smoothstep = (edge0: number, edge1: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+};

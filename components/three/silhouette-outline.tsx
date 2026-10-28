@@ -23,6 +23,7 @@ const fragmentShader = /* glsl */ `
   uniform float uRim;
   uniform vec3 uColor;
   uniform vec3 uRimColor;
+  uniform float uOpacity;
   varying vec2 vUv;
   const int ANGLES = 40;
   const int RINGS = 12;
@@ -54,7 +55,7 @@ const fragmentShader = /* glsl */ `
     float edge = reach / float(RINGS);
     float rim = smoothstep(uWidth - edge * 0.5, uWidth + edge * 0.5, dist);
     float alpha = 1.0 - smoothstep(reach - edge, reach, dist);
-    gl_FragColor = vec4(mix(uColor, uRimColor, rim), alpha);
+    gl_FragColor = vec4(mix(uColor, uRimColor, rim), alpha * uOpacity);
   }
 `;
 
@@ -72,9 +73,11 @@ interface SilhouetteOutlineProps {
   rim?: number;
   color?: string;
   rimColor?: string;
+  /** Optional 0-1 visibility, read every frame. */
+  fade?: () => number;
 }
 
-export function SilhouetteOutline({ target, exclude, depthAt, width = 12, rim = 2.5, color = '#ffffff', rimColor = '#2f2a27' }: SilhouetteOutlineProps) {
+export function SilhouetteOutline({ target, exclude, depthAt, width = 12, rim = 2.5, color = '#ffffff', rimColor = '#2f2a27', fade }: SilhouetteOutlineProps) {
   const dpr = useThree((s) => s.viewport.dpr);
   const mask = useFBO();
   const quad = useRef<Mesh>(null);
@@ -92,6 +95,7 @@ export function SilhouetteOutline({ target, exclude, depthAt, width = 12, rim = 
           uRim: { value: 0 },
           uColor: { value: new Color(color) },
           uRimColor: { value: new Color(rimColor) },
+          uOpacity: { value: 1 },
         },
         transparent: true,
         depthTest: true,
@@ -103,6 +107,10 @@ export function SilhouetteOutline({ target, exclude, depthAt, width = 12, rim = 
   // After the scene's own animation (priority 0), before drei's View draws it (priority 1).
   useFrame((state) => {
     const { gl, scene, camera } = state;
+    const visibility = fade ? fade() : 1;
+    if (quad.current) quad.current.visible = visibility > 0.001;
+    material.uniforms.uOpacity.value = visibility;
+    if (visibility <= 0.001) return;
     const hidden: Object3D[] = [];
     scene.traverse((o) => {
       if (o.visible && (o === quad.current || (o !== target && exclude(o)))) {

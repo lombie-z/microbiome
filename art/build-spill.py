@@ -14,7 +14,12 @@ planter = bpy.data.objects['Planter']
 
 WATER_Z = 0.522  # surface of the water in the planter
 WATER_HALF = 0.43  # the surface runs just into the inner walls (at 0.422) so no wall shows below the waterline
-POOL_Z = -5.5  # surface of the pool the falls land in
+POOL_Z = -11.0  # surface of the pool the falls land in
+# Below the cloud layer the falls slowly bend together and braid (MERGE_TOP to MERGE_Z). Over the last stretch they
+# fade out as one big fall fades in around them (MAIN_TOP down to the pool), so there's no hard join.
+MERGE_TOP, MERGE_Z, MAIN_TOP = -2.1, -7.0, -5.6
+STREAMS_FADE = (-6.0, -7.0)  # streams go from opaque to gone between these heights
+MAIN_FADE = (-5.6, -6.8)  # the big fall goes from gone to opaque
 # (name, outward face normal, position along the face, half-width, gap floor z). A and B face the hero camera; C is
 # on the back and turns up while the camera circles.
 GAPS = [
@@ -262,7 +267,14 @@ def water_materials():
     alpha.inputs['To Min'].default_value = 0.95
     alpha.inputs['To Max'].default_value = 0.85
     nt.links.new(flow.outputs['Fac'], alpha.inputs['Value'])
-    nt.links.new(alpha.outputs['Result'], bsdf.inputs['Alpha'])
+    # 'fade' crossfades the streams into the big fall.
+    fade = nt.nodes.new('ShaderNodeAttribute')
+    fade.attribute_name = 'fade'
+    faded = nt.nodes.new('ShaderNodeMath')
+    faded.operation = 'MULTIPLY'
+    nt.links.new(alpha.outputs['Result'], faded.inputs[0])
+    nt.links.new(fade.outputs['Fac'], faded.inputs[1])
+    nt.links.new(faded.outputs['Value'], bsdf.inputs['Alpha'])
     # White: the brightest ridges once falling, and the foam attribute broken up by finer noise.
     streak = nt.nodes.new('ShaderNodeMapRange')
     streak.inputs['From Min'].default_value = 0.58
@@ -366,11 +378,25 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
         x += 0.006
         path.append(c + n * (0.5 + x) + Vector((0, 0, lip.z - k * x * x)))
     z = path[-1].z
-    while z > POOL_Z - 0.15:
-        z = max(z - 0.04, POOL_Z - 0.15)
+    # Each stream ends tucked inside the big fall's crown, entering it on its own side.
+    # They start turning in at slightly different heights and spiral round each other as they gather (a braid,
+    # not a funnel).
+    rnd = random.Random(seed)
+    top = MERGE_TOP - rnd.uniform(0.0, 0.8)
+    end_z = MERGE_Z - 0.1
+    into = (c + n * 0.5).xy.normalized() * rnd.uniform(0.16, 0.24)
+    merging = [0.0] * len(path)
+    while z > end_z:
+        z = max(z - 0.04, end_z)
         drop = lip.z - z
-        wander = noise.noise(Vector((drop * 0.9, seed, 0))) * 0.06 * min(1, drop)
-        path.append(c + n * (0.5 + math.sqrt(drop / k)) + t * wander + Vector((0, 0, z)))
+        m = ease((top - z) / (top - MERGE_Z))
+        wander = noise.noise(Vector((drop * 0.9, seed, 0))) * 0.06 * min(1, drop) * (1 - m)
+        p = c + n * (0.5 + math.sqrt(drop / k)) + t * wander + Vector((0, 0, z))
+        p.xy = p.xy.lerp(into, m)
+        twist = math.radians(200) * m * m
+        p.xy = Vector((p.x * math.cos(twist) - p.y * math.sin(twist), p.x * math.sin(twist) + p.y * math.cos(twist)))
+        path.append(p)
+        merging.append(m)
     full = [*centres, *path]
     lengths = [0.0]
     for i in range(1, len(full)):
@@ -385,7 +411,8 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
         up = tangent.cross(side).normalized()
         after = lengths[i] - lip_length
         f = after / (total - lip_length)
-        width = hw * 0.8 * (1 + 0.45 * f) * (1 + 0.08 * noise.noise(Vector((lengths[i] * 1.5, seed, 1))))
+        squeeze = 1 - 0.25 * merging[i - len(centres)]
+        width = hw * 0.8 * (1 + 0.45 * f) * (1 + 0.08 * noise.noise(Vector((lengths[i] * 1.5, seed, 1)))) * squeeze
         thick = (0.022 + 0.05 * min(1, f * 3)) * trickle(hw)
         # The channel's shape morphs into the falling column over the first 25 cm.
         morph = ease(after / 0.25)
@@ -400,11 +427,12 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
         rings.append(ring_verts)
         flow.append(fl)
 
+    fade = [1.0 - ease((STREAMS_FADE[0] - p.z) / (STREAMS_FADE[0] - STREAMS_FADE[1])) for p in full]
     foam = []
     for i in range(len(full)):
         after = lengths[i] - lip_length
         # White water just past the lip, where it breaks over the curl, rather than a line on the edge itself.
-        white = max(0.75 * max(0.0, 1 - abs(after - 0.08) / 0.12), max(0.0, 1 - (total - lengths[i]) / 0.3))
+        white = 0.75 * max(0.0, 1 - abs(after - 0.08) / 0.12)
         foam.append(min(1.0, white))
 
     bm = bmesh.new()
@@ -423,7 +451,7 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
     bm.free()
     for poly in me.polygons:
         poly.use_smooth = True
-    for attr_name, values in (('flow', flow), ('foam', foam)):
+    for attr_name, values in (('flow', flow), ('foam', foam), ('fade', fade)):
         attr = me.attributes.new(attr_name, 'FLOAT', 'POINT')
         attr.data.foreach_set('value', [values[i // ring] for i in range(len(me.vertices))])
     me.materials.append(material)
@@ -432,17 +460,73 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
     return o, full[-1]
 
 
-def splash(name, at, seed, material):
+def main_fall(name, material, ring=48):
+    """The big fall the streams braid into: a column turned around the axis under the planter, crowned with churning
+    white water where they join, rippled lengthwise, landing in the middle of the pool."""
+    bottom = POOL_Z - 0.15
+    rings, lengths, foam, fade = [], [], [], []
+    z = MAIN_TOP
+    length = 0.0
+    while True:
+        h = MAIN_TOP - z
+        if h < 0.3:
+            radius = 0.3 * math.sin(max(h, 0.002) / 0.3 * math.pi / 2)  # low, rounded crown inside the braid
+        else:
+            radius = lerp(0.3, 0.44, ease((h - 0.3) / (MAIN_TOP - bottom - 0.3)))
+        centre = Vector((noise.noise(Vector((z * 0.6, 4.2, 0))) * 0.04, noise.noise(Vector((z * 0.6, 7.7, 0))) * 0.04, z))
+        ring_verts = []
+        for j in range(ring):
+            a = 2 * math.pi * j / ring
+            ridge = 1 + 0.07 * noise.noise(Vector((math.cos(a) * 2.2, math.sin(a) * 2.2, z * 0.7)))
+            ring_verts.append(centre + Vector((math.cos(a), math.sin(a), 0)) * radius * ridge)
+        rings.append(ring_verts)
+        lengths.append(length)
+        foam.append(max(1 - ease(h / 0.6), max(0.0, 1 - (z - bottom) / 0.35)))
+        fade.append(ease((MAIN_FADE[0] - z) / (MAIN_FADE[0] - MAIN_FADE[1])))
+        if z <= bottom:
+            break
+        step = 0.02 if h < 0.3 else 0.06
+        z = max(z - step, bottom)
+        length += step
+    bm = bmesh.new()
+    uv_layer = bm.loops.layers.uv.new('UVMap')
+    verts = [[bm.verts.new(v) for v in r] for r in rings]
+    for i in range(len(verts) - 1):
+        for j in range(ring):
+            face = bm.faces.new((verts[i][j], verts[i + 1][j], verts[i + 1][(j + 1) % ring], verts[i][(j + 1) % ring]))
+            uvs = ((j / ring, lengths[i]), (j / ring, lengths[i + 1]), ((j + 1) / ring, lengths[i + 1]), ((j + 1) / ring, lengths[i]))
+            for loop, uv in zip(face.loops, uvs, strict=True):
+                loop[uv_layer].uv = uv
+    bm.normal_update()
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    for attr_name, values in (('flow', [1.0] * len(rings)), ('foam', foam), ('fade', fade)):
+        attr = me.attributes.new(attr_name, 'FLOAT', 'POINT')
+        attr.data.foreach_set('value', [values[i // ring] for i in range(len(me.vertices))])
+    me.materials.append(material)
+    o = fresh_object(name, me)
+    o.parent = root
+    return o
+
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def splash(name, at, seed, material, scale=1.0):
     """Where a fall lands: a crown of white-water beads and rings spreading on the pool."""
     rnd = random.Random(seed)
     bm = bmesh.new()
-    for k in range(22):
-        a = k / 14 * 2 * math.pi + rnd.uniform(-0.2, 0.2)
-        r = rnd.uniform(0.08, 0.24)
-        size = rnd.uniform(0.03, 0.075)
+    for k in range(22 if scale == 1 else 60):
+        a = rnd.uniform(0, 2 * math.pi)
+        r = rnd.uniform(0.08, 0.24) * scale
+        size = rnd.uniform(0.03, 0.075) * (1 + 0.4 * (scale - 1))
         geom = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=size)
-        bmesh.ops.translate(bm, vec=at + Vector((math.cos(a) * r, math.sin(a) * r, rnd.uniform(0.0, 0.12))), verts=geom['verts'])
-    for radius in (0.26, 0.42, 0.6):
+        bmesh.ops.translate(bm, vec=at + Vector((math.cos(a) * r, math.sin(a) * r, rnd.uniform(0.0, 0.12) * scale)), verts=geom['verts'])
+    for radius in (0.26 * scale, 0.42 * scale, 0.6 * scale):
         geom = bmesh.ops.create_circle(bm, segments=64, radius=radius)
         ring_edges = [e for e in bm.edges if all(v in geom['verts'] for v in e.verts)]
         tube = bmesh.ops.extrude_edge_only(bm, edges=ring_edges)
@@ -461,9 +545,12 @@ def splash(name, at, seed, material):
 
 
 water_fall, foam_material = water_materials()
+for o in [o for o in bpy.data.objects if o.name.startswith('Splash.')]:
+    bpy.data.objects.remove(o)
 for i, (name, n, along, hw, zb) in enumerate(ALL_GAPS):
-    _, end = waterfall(f'Fall.{name}', n, along, hw, zb, i * 7.3, water_fall)
-    splash(f'Splash.{name}', Vector((end.x, end.y, POOL_Z)), i, foam_material)
+    waterfall(f'Fall.{name}', n, along, hw, zb, i * 7.3, water_fall)
+main_fall('Fall.Main', water_fall)
+splash('Splash', Vector((0, 0, POOL_Z)), 0, foam_material, scale=2.2)
 
 
 # --- Pool basin -------------------------------------------------------------------------------------------------------
