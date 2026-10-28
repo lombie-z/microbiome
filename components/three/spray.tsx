@@ -161,17 +161,18 @@ export function Spray({ scene }: { scene: Object3D }) {
       }),
       // Mist off the pool, rising and spreading slowly.
       particles({
-        count: 140,
+        count: 220,
         gravity: 0,
-        color: '#fff8ef',
-        opacity: 0.16,
+        color: '#fff2e2',
+        opacity: 0.22,
         softness: 1,
         emit: (_, start, velocity) => {
+          // A great billowing cloud of mist at the fall's foot, rolling up and out over the lake.
           const a = Math.random() * Math.PI * 2;
-          const r = FALL_FOOT * 0.6 + Math.random() * 2.2;
-          start.set(Math.cos(a) * r, POOL_Y + 0.05, Math.sin(a) * r);
-          velocity.set(Math.cos(a) * 0.12, 0.15 + Math.random() * 0.15, Math.sin(a) * 0.12);
-          return { life: 5 + Math.random() * 4, size: 1.2 + Math.random() * 1.6 };
+          const r = FALL_FOOT * 0.5 + Math.random() * 3.2;
+          start.set(Math.cos(a) * r, POOL_Y + 0.05 + Math.random() * 0.6, Math.sin(a) * r);
+          velocity.set(Math.cos(a) * 0.18, 0.2 + Math.random() * 0.3, Math.sin(a) * 0.18);
+          return { life: 6 + Math.random() * 5, size: 2 + Math.random() * 2.5 };
         },
       }),
       // A softer haze where the streams braid into one.

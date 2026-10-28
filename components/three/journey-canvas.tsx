@@ -8,6 +8,7 @@ import { isLightDevice } from '@/lib/journey';
 import { Biome } from './biome';
 import { Effects } from './effects';
 import { JourneyCamera } from './journey-camera';
+import { Lake } from './lake';
 import { Sky } from './sky';
 
 /** Download progress (0-100) of the model and decoder, for the loading overlay. */
@@ -36,6 +37,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
       <Progress onProgress={onProgress} />
       <JourneyCamera />
       <Sky sun={sun} />
+      <Lake />
       <Suspense fallback={null}>
         <Biome onReady={onReady} onSun={setSun} />
       </Suspense>

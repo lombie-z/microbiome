@@ -101,6 +101,9 @@ ${NOISE}`
   streak = smoothstep(0.6, 0.78, streak) * 0.65 * vFlow;
   float churn = smoothstep(0.35, 0.65, waterNoise(vec2(vFlowUv.x * 22.0, (along - uTime * 1.2) * 5.0)));
   white = max(streak, vFoam * churn);
+  // The big fall turns white as it drops: aerated water, as in a real fall.
+  float aerated = smoothstep(-6.5, -10.8, vWorld.y) * vFlow;
+  white = max(white, aerated * mix(0.35, 0.95, churn));
 #endif
 #ifdef POOL
   // Rings spreading out from where the big fall lands.

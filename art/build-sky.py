@@ -126,7 +126,7 @@ me.materials.append(emissive('Sun', (1.0, 0.6, 0.25), 8.0))
 sun = fresh_object('Sun', me)
 # Low and off to one side of the falls (never straight behind them, where it would show through the water), in view
 # from the shots below the clouds.
-sun.location = (48, 45, -7.5)
+sun.location = (60, 20, -0.5)
 
 # --- Rainbow ----------------------------------------------------------------------------------------------------------
 
@@ -172,6 +172,7 @@ def rainbow_material():
     strength = nt.nodes.new('ShaderNodeMath')
     strength.operation = 'MULTIPLY'
     strength.inputs[1].default_value = 0.8
+    strength.label = 'bow'  # build-journey.py keys its fade-in
     nt.links.new(alpha.outputs['Value'], strength.inputs[0])
     em = nt.nodes.new('ShaderNodeEmission')
     em.inputs['Strength'].default_value = 1.7
@@ -186,7 +187,7 @@ def rainbow_material():
 
 
 # An arch over the pool, the big fall pouring through its middle, facing the way the camera lands.
-RADIUS, WIDTH, SEGMENTS = 2.6, 0.42, 96
+RADIUS, WIDTH, SEGMENTS = 4.6, 0.6, 128
 bm = bmesh.new()
 uv_layer = bm.loops.layers.uv.new('UVMap')
 rows = []
@@ -202,5 +203,5 @@ bm.to_mesh(me)
 bm.free()
 me.materials.append(rainbow_material())
 bow = fresh_object('Rainbow', me)
-bow.location = (0, 0.35, POOL_Z - 0.15)
-bow.rotation_euler = (0, 0, math.radians(-70))  # faces where the camera swings out to
+bow.location = (0.4, -2.2, POOL_Z - 0.4)
+bow.rotation_euler = (0, 0, math.radians(-86))  # faces the landing camera, arcing off to the right of the fall

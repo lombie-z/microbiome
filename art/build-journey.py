@@ -10,10 +10,10 @@ against the water, at its pace, looking up at it and down along it (the site hid
   80-215   Tuck in beside fall A under the lip, looking up at the planter; tip over and fall with it, looking down.
   215-265  Past the cloud layer; below it the sun is out.
   265-460  Spiral down with the streams as they braid, then look up at the braid winding overhead into the light.
-  460-670  Keep looking up while drifting down and away from the fall, levelling out at the water: eye level in the
-           shoreline garden (art/build-macro.py), the frog in front of the splash.
-  670-820  Rise over the garden and pull right back: the giant biome below, the small one floating above it, its
-           falls pouring down into the big one (micro to macro).
+  460-760  Keep looking up while drifting down and away from the fall, levelling out at the water: the landing, eye
+           level on the lake (art/build-landing.py), the frog close, the fall and pink cliffs beyond.
+  760-920  Hold a moment, then rise and pull right back: the canyon below, the tiny clay biome floating far above it,
+           its falls pouring down into the real world.
 """
 import math
 
@@ -21,7 +21,7 @@ import bpy
 from mathutils import Vector
 
 scene = bpy.context.scene
-F_OPEN, F_END = 80, 820
+F_OPEN, F_END = 80, 920
 HERO_TARGET = Vector((0, 0, 0.92))
 HERO_DIRECTION = Vector((-1, -1, 0.75)).normalized()  # the blog's view (PreviewCam)
 HERO_FOV, OPEN_FOV = 6.0, 38.0
@@ -39,16 +39,19 @@ SHOTS = [
     (400, Vector((0.95, 0.74, -4.6)), Vector((0.0, 0.0, -6.5)), 50.0),  # spiralling round with the twist
     (460, Vector((-0.37, 0.65, -6.4)), Vector((0.0, 0.0, -3.5)), 55.0),  # looking up the braid winding overhead into the light
     # Still looking up, drifting down and away from the fall, levelling out to eye height as it reaches the water.
-    (530, Vector((-1.39, 0.8, -8.0)), Vector((0.0, 0.0, -5.6)), 52.0),
-    (600, Vector((-2.27, 0.4, -9.9)), Vector((0.0, 0.0, -8.2)), 52.0),
-    (670, Vector((-2.4, -0.35, -10.72)), Vector((0.0, 0.15, -10.3)), 52.0),  # eye level in the garden: the frog, the fall
-    (710, Vector((-2.7, -0.55, -9.5)), Vector((-0.3, 0.3, -10.4)), 48.0),  # rising over the garden
-    (765, Vector((-7.0, -6.0, -5.0)), Vector((-0.8, 0.8, -8.5)), 40.0),  # pulling back over the giant planter's wall
-    (820, Vector((-18.5, -16.7, 7.2)), Vector((-0.9, 0.9, -6.0)), 34.0),  # the final frame: micro over macro
+    (530, Vector((-1.6, 0.7, -8.0)), Vector((0.0, 0.0, -5.6)), 52.0),
+    (610, Vector((-6.0, 0.4, -9.4)), Vector((0.0, 0.0, -6.8)), 48.0),
+    (690, Vector((-15.0, -1.2, -10.2)), Vector((0.0, -0.6, -8.0)), 42.0),
+    # The landing (art/build-landing.py): eye level on the lake, the frog close, the fall and cliffs beyond.
+    (760, Vector((-27.0, -2.5, -10.55)), Vector((0.0, -1.4, -9.2)), 38.0),
+    (800, Vector((-27.2, -2.55, -10.5)), Vector((0.0, -1.4, -9.15)), 38.0),
+    # Rise and pull right back: the canyon, the lake, and the tiny clay biome floating high above it all.
+    (860, Vector((-31.0, -9.0, -6.0)), Vector((-2.0, 0.0, -8.0)), 40.0),
+    (920, Vector((-42.0, -30.0, 8.0)), Vector((-2.0, 0.0, -5.0)), 40.0),
 ]
 # Sun, warm light and rainbow come in below the clouds.
 F_SUN_IN, F_SUN_FULL = 275, 380
-F_BOW_IN, F_BOW_FULL = 560, 640
+F_BOW_IN, F_BOW_FULL = 640, 720
 
 
 def ease(x):
@@ -176,11 +179,8 @@ bow = bpy.data.objects['Rainbow']
 key_hidden(bow, F_BOW_IN)
 bow_mat = bpy.data.materials['Rainbow']
 bow_mat.node_tree.animation_data_clear()
-# The 0.8 multiplier on the bow's opacity (build-sky.py), labelled the first time so re-runs find it.
-strength = next((n for n in bow_mat.node_tree.nodes if n.label == 'bow'), None)
-if strength is None:
-    strength = next(n for n in bow_mat.node_tree.nodes if n.type == 'MATH' and abs(n.inputs[1].default_value - 0.8) < 1e-6)
-    strength.label = 'bow'
+# The 0.8 multiplier on the bow's opacity (labelled 'bow' in build-sky.py).
+strength = next(n for n in bow_mat.node_tree.nodes if n.label == 'bow')
 key_value(strength.inputs[1], ((F_BOW_IN, 0.0), (F_BOW_FULL, 0.8)))
 
 # The studio key light warms as the sun comes out.

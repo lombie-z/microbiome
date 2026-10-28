@@ -10,7 +10,8 @@ STILL = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome.png')
 # Silhouette without the lettering, for the sticker outline (composited by art/outline-still.sh).
 STILL_MASK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-mask.png')
 STILL_BACK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-back.png')
-DECIMATE = {'Cloud': 0.3, 'Letter': 0.15, 'Word': 0.15, 'Spire': 0.3, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.04, 'Basin': 0.035, 'SkyCloud': 0.06}
+DECIMATE = {'Cloud': 0.3, 'Letter': 0.15, 'Word': 0.15, 'Spire': 0.3, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.04, 'SkyCloud': 0.06,
+            'Landing.Canyon': 0.4, 'Landing.Shrubs': 0.3, 'Landing.Blossom': 0.35}
 # Point attributes the site's water shader reads (glTF only carries custom attributes named with a leading underscore).
 WATER_ATTRIBUTES = ('flow', 'foam', 'fade')
 
@@ -31,7 +32,7 @@ letters = [o for o in root.children_recursive if o.type in {'FONT', 'MESH'} and 
 back = [o for o in letters if (o.matrix_world.translation - root.matrix_world.translation).dot(cam_dir) < 0]
 # The hero shows the biome and its falls; the sky below (clouds, basin, pool, sun, rainbow) and the spill cutters stay
 # out of the still.
-SKY = ('SkyCloud', 'Pool', 'Splash', 'Sun', 'Rainbow', 'Fall.Main', 'Macro', 'Garden')
+SKY = ('SkyCloud', 'Pool', 'Splash', 'Sun', 'Rainbow', 'Fall.Main', 'Landing')
 hero = [o for o in root.children_recursive if o.type in {'MESH', 'FONT'} and not o.name.startswith(SKY) and o.name != 'Planter.Source']
 everything = [o for o in scene.objects if o.type in {'MESH', 'FONT'}]
 
@@ -92,6 +93,10 @@ for o in list(root.children_recursive):
     for name in WATER_ATTRIBUTES:
         if name in o.data.attributes:
             o.data.attributes[name].name = '_' + name
+    # The landing's canyon, plants and foreground are painted in vertex colour ('Col'); export that, unbaked.
+    if 'Col' in o.data.color_attributes:
+        o.data.color_attributes.active_color = o.data.color_attributes['Col']
+        continue
     o.data.color_attributes.active_color = o.data.color_attributes.new('AO', 'BYTE_COLOR', 'CORNER')
     meshes.append(o)
 

@@ -13,19 +13,19 @@ export function heroStageSize(width: number, height: number) {
 }
 
 /** The journey's length in track frames (art/build-journey.py F_END); beats below are in the same frames. */
-export const TRACK_FRAMES = 820;
+export const TRACK_FRAMES = 920;
 export const BEATS = {
   /** End of the opening dolly zoom, where the fitted hero hands over to the authored path. */
   open: 80,
   /** Below the clouds the sun comes out and the sky warms. */
   sunIn: 275,
   sunFull: 380,
-  /** Fog closes in once the camera is among the falls, and lifts for the pool. */
+  /** Fog closes in once the camera is among the falls, and thins to a warm haze over the lake. */
   fogIn: 110,
-  fogOut: [560, 640],
+  fogOut: [600, 700],
   /** The rainbow over the pool. */
-  bowIn: 560,
-  bowFull: 640,
+  bowIn: 640,
+  bowFull: 720,
 } as const;
 
 /** Shared per-frame journey state: written once a frame by JourneyCamera, read by everything else. */

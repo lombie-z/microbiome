@@ -18,7 +18,7 @@ POOL_Z = -11.0  # surface of the pool the falls land in
 # Below the cloud layer the falls slowly bend together and braid (MERGE_TOP to MERGE_Z). Over the last stretch they
 # fade out as one big fall fades in around them (MAIN_TOP down to the pool), so there's no hard join.
 MERGE_TOP, MERGE_Z, MAIN_TOP = -2.1, -7.0, -5.6
-SPREAD = 0.65  # how much wider the big fall gets by the time it reaches the pool
+SPREAD = 1.0  # how much wider the big fall gets by the time it reaches the pool
 STREAMS_FADE = (-6.0, -7.0)  # streams go from opaque to gone between these heights
 MAIN_FADE = (-5.6, -6.8)  # the big fall goes from gone to opaque
 # (name, outward face normal, position along the face, half-width, gap floor z). A and B face the hero camera; C is

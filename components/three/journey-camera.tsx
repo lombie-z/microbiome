@@ -46,7 +46,8 @@ export function JourneyCamera() {
 
   useEffect(() => {
     let live = true;
-    fetch('/journey.json')
+    // Revalidate: the track changes whenever the path is re-cut in Blender.
+    fetch('/journey.json', { cache: 'no-cache' })
       .then((r) => r.json())
       .then((data: { frames: Track }) => {
         if (live) track.current = data.frames;
