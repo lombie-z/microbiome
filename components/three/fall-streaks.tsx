@@ -52,7 +52,8 @@ void main() {
   float fan = mix(mix(0.12, 1.0, smoothstep(0.0, 1.6, fallen)), mix(0.62, 0.78, fallen / drop), uLanding);
   centre.xz *= fan;
   // Stretch with speed (motion blur), widen a touch as it falls and breaks up.
-  float len = 0.14 + v * 0.06;
+  // (Shorter at the landing, where the curtain is seen whole and long smears would blur its texture.)
+  float len = (0.14 + v * 0.06) * mix(1.0, 0.45, uLanding);
   float width = aWidth * (1.0 + fallen * 0.08);
   vec3 right = normalize(vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]));
   vec3 p = centre + right * position.x * width + vec3(0.0, 1.0, 0.0) * position.y * len;
@@ -73,7 +74,7 @@ varying vec2 vQuad;
 void main() {
   float a = (1.0 - vQuad.x * vQuad.x) * (1.0 - smoothstep(0.3, 1.0, abs(vQuad.y)));
   // Thinner on the way down beside the braid (the camera is right in it), full at the landing.
-  gl_FragColor = vec4(uColor * vShade, a * vAlpha * uOpacity * mix(0.6, 1.0, uLanding));
+  gl_FragColor = vec4(uColor * vShade, a * vAlpha * uOpacity * mix(0.6, 0.55, uLanding));
   #include <colorspace_fragment>
 }`;
 
@@ -100,13 +101,17 @@ float fNoise(vec2 p) {
 }
 void main() {
   // Vertical ropes racing down, brighter and dimmer.
-  float ropes = fNoise(vec2(vUv.x * 60.0, vUv.y * 4.0 + uTime * 1.4)) * 0.6 + fNoise(vec2(vUv.x * 170.0, vUv.y * 9.0 + uTime * 2.2)) * 0.4;
+  float ropes = fNoise(vec2(vUv.x * 60.0, vUv.y * 3.0 + uTime * 1.4)) * 0.5 + fNoise(vec2(vUv.x * 170.0, vUv.y * 7.0 + uTime * 2.2)) * 0.3
+    + fNoise(vec2(vUv.x * 420.0, vUv.y * 14.0 + uTime * 3.0)) * 0.2;
   float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
   // Frayed sides: the ropes thin out toward the edges.
   edge *= smoothstep(0.2, 0.5, ropes + edge * 0.5);
-  float a = uLanding * edge * mix(0.55, 0.9, ropes) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(vUv.x));
+  float a = uLanding * edge * mix(0.75, 0.98, ropes) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(vUv.x));
   // Deep shadowed gaps between bright ropes, as in the reference's fall.
-  vec3 c = vec3(1.25, 1.2, 1.12) * mix(0.45, 1.1, smoothstep(0.25, 0.75, ropes)) * mix(1.0, 0.88, vUv.x);
+  vec3 c = vec3(1.35, 1.24, 1.08) * mix(0.45, 1.15, smoothstep(0.28, 0.72, ropes)) * mix(1.0, 0.86, vUv.x);
+  // Glitter: droplets in the ropes flashing in the low sun, bright enough to bloom.
+  float glitter = smoothstep(0.8, 0.95, fNoise(vec2(vUv.x * 520.0, vUv.y * 70.0 + uTime * 7.0))) * smoothstep(0.45, 0.75, ropes);
+  c += vec3(1.6, 1.35, 1.0) * glitter;
   gl_FragColor = vec4(c, a);
   #include <colorspace_fragment>
 }`;

@@ -111,7 +111,7 @@ def height(x, y):
     return LAKE_Z - 0.15 + h
 
 
-SIZE, N = 84.0, 230
+SIZE, N = 84.0, 300
 step = SIZE / N
 bm = bmesh.new()
 grid = []
@@ -136,7 +136,11 @@ for v in bm.verts:
         fractures = -abs(noise.noise(Vector((p.x * 1.6, p.y * 1.6, p.z * 0.25)))) * 0.7
         strata = noise.noise(Vector((p.x * 0.1, p.y * 0.1, p.z * 1.4))) * 0.35
         crags = fbm(p * 0.9, 3) * 0.3
-        v.co += v.normal * (columns + fractures + strata + crags) * smoothstep(0.2, 0.6, steep)
+        # Blocks: tall columns standing proud or set back by whole slabs (cells of a Voronoi pattern stretched up the
+        # face, each pushed by its own amount), so the walls break into the reference's pillars with sharp edges.
+        _, points = noise.voronoi(Vector((p.x * 0.42, p.y * 0.42, p.z * 0.13)))
+        blocks = noise.noise(points[0] * 7.1) * 1.1
+        v.co += v.normal * (columns * 0.6 + fractures + strata + crags + blocks) * smoothstep(0.2, 0.6, steep)
 bm.normal_update()
 
 # Colour: pink rock, peachy where the light catches the upper faces, darker in the cracks; green on ledges and tops;
@@ -273,6 +277,8 @@ link('Pool', me)
 # Laid out from the reference image (art/reference/landing-pov): each piece is placed by its pixel position in that
 # 1536x1024 frame, cast back from the landing camera (JourneyCam at frame 770, art/build-journey.py) onto the water.
 
+# Its own random stream, so rebuilding the canyon doesn't reshuffle the foreground.
+rnd = random.Random(21)
 scene.frame_set(770)
 VIEW = bpy.data.objects['JourneyCam'].matrix_world.copy()
 EYE = VIEW.translation.copy()
@@ -578,9 +584,9 @@ finish('Landing.Reeds', bm, material('Reed', 0.45))
 
 # Pebbles: wet grey-brown granite (speckled and glittering on the site), heaped in the bottom right (out of focus,
 # close to the camera) and climbing to the reeds, a couple by the pads. Irregular river stones, not eggs.
-STONE = Color((0.6, 0.52, 0.45))
-STONE_WARM = Color((0.66, 0.5, 0.4))
-STONE_GREY = Color((0.5, 0.48, 0.46))
+STONE = Color((0.74, 0.66, 0.58))
+STONE_WARM = Color((0.78, 0.64, 0.52))
+STONE_GREY = Color((0.64, 0.62, 0.6))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 PEBBLES = [(1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95), (1405, 905, 90), (1525, 880, 60),
@@ -591,9 +597,7 @@ PEBBLES = [(1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95),
 for px, py, half in PEBBLES:
     contact = at(px, py)
     r = px_size(contact, half)
-    # Stones further back in the heap rest higher, on the ones in front.
-    lift = r * 0.25 + (0.04 if py < 900 and px > 1100 else 0.0)
-    centre = contact + Vector((0, 0, lift))
+    centre = contact + Vector((0, 0, r * 0.1))
     tone = rnd.uniform(0, 1)
     base = mix(mix(STONE, STONE_WARM, tone), STONE_GREY, rnd.uniform(0, 0.6))
     geom = bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=1)
@@ -602,9 +606,9 @@ for px, py, half in PEBBLES:
     seed = Vector((rnd.uniform(0, 50), rnd.uniform(0, 50), rnd.uniform(0, 50)))
     for v in geom['verts']:
         n = v.co.copy()
-        # Lumpy and a little faceted: low-frequency bulges and flattened facets, a flatter underside.
+        # Lumpy and a little faceted: low-frequency bulges, sunk a little into the shallows.
         bulge = noise.noise(n * 1.3 + seed) * 0.16 + noise.noise(n * 3.1 + seed) * 0.05
-        local = Vector((n.x * sx, n.y * sy, n.z * sz * (0.6 if n.z < 0 else 1.0))) * (1 + bulge)
+        local = Vector((n.x * sx, n.y * sy, n.z * sz)) * (1 + bulge)
         v.co = rotate_z(local * r, spin) + centre
     colour_faces(bm, geom['verts'], col, lambda co, c=base: c)
 finish('Landing.Pebbles', bm, material('Pebble', 0.45))

@@ -20,6 +20,7 @@ import { BEATS, journey, landingAt, smoothstep } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
+import { MistBank } from './mist-bank';
 import { rockMaterial } from './rock';
 import { SilhouetteOutline } from './silhouette-outline';
 import { bloomAt, SUN_POSITION } from './sky';
@@ -293,6 +294,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       <primitive object={scene} />
       {!(process.env.NODE_ENV === 'development' && window.location.search.includes('nospray')) && <Spray scene={scene} />}
       <FallStreaks />
+      <MistBank />
       {canyon && <Foliage canyon={canyon} />}
       <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>

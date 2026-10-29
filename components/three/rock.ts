@@ -75,6 +75,10 @@ export function rockMaterial(source: MeshStandardMaterial) {
   float det = dot(dpdx, r1);
   vec3 grad = sign(det) * (dhdx * r1 + dhdy * r2);
   normal = normalize(abs(det) * normal - grad);
+  // Crisp facets: lean toward the face's true (flat) normal, so the blocks' planes and edges read as rock, not clay.
+  vec3 facet = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition)));
+  if (dot(facet, normal) < 0.0) facet = -facet;
+  normal = normalize(mix(normal, facet, 0.55 * (1.0 - abs(vRockNormal.y))));
 }`
       );
   };

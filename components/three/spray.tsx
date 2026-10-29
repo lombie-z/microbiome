@@ -207,7 +207,7 @@ export function Spray({ scene }: { scene: Object3D }) {
       // reference's great white billows). Only visible from afar, so it fades in with the landing.
       withLanding(
         particles({
-          count: Math.round(520 * share),
+          count: Math.round(240 * share),
           gravity: 0,
           // Past white: backlit by the low sun, it blooms, as the reference's billows blaze.
           color: new Color(1.5, 1.38, 1.2),
@@ -219,10 +219,10 @@ export function Spray({ scene }: { scene: Object3D }) {
             const height = Math.random() ** 2.5 * 3.4 * (1 - Math.abs(along) / 12);
             start.set(-1.2 + Math.random() * 2.8, POOL_Y + 0.2 + height, along);
             velocity.set((Math.random() - 0.5) * 0.12, 0.08 + Math.random() * 0.12, (Math.random() - 0.5) * 0.25);
-            return { life: 9 + Math.random() * 6, size: 0.9 + Math.random() * 1.8 };
+            return { life: 9 + Math.random() * 6, size: 1.2 + Math.random() * 2.0 };
           },
         }),
-        (landing) => 0.42 * landing
+        (landing) => 0.3 * landing
       ),
       // A softer haze where the streams braid into one.
       particles({

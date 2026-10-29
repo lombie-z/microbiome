@@ -35,7 +35,8 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     if (vignette.current) vignette.current.darkness = 0.18 * underway + 0.12 * bloom;
     if (grain.current) grain.current.blendMode.opacity.value = 0.05 * underway;
     if (grade.current) grade.current.weight = landingAt(journey.frame);
-    if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame);
+    // The shallow focus is the landing's still shot; it clears as the camera rises away (from frame 800).
+    if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
   });
 
   return (

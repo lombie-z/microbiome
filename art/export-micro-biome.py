@@ -11,7 +11,7 @@ STILL = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome.png')
 STILL_MASK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-mask.png')
 STILL_BACK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-back.png')
 DECIMATE = {'Cloud': 0.3, 'Letter': 0.15, 'Word': 0.15, 'Spire': 0.3, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.04, 'SkyCloud': 0.06,
-            'Landing.Canyon': 0.4, 'Landing.Shrubs': 0.3, 'Landing.Blossom': 0.35, 'Landing.Frog': 0.35}
+            'Landing.Canyon': 0.35, 'Landing.Shrubs': 0.3, 'Landing.Blossom': 0.35, 'Landing.Frog': 0.35}
 # Point attributes the site's water shader reads (glTF only carries custom attributes named with a leading underscore).
 WATER_ATTRIBUTES = ('flow', 'foam', 'fade')
 
