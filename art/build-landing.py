@@ -66,19 +66,23 @@ def shore_radius(theta):
     # 7.6 behind the fall, opening out westward into a long lake the camera looks up from far down.
     base = 7.6 + 22 * ((1 - math.cos(theta)) * 0.5) ** 1.6
     base += 2.5 * max(0.0, math.sin(theta)) - 0.5 * max(0.0, -math.sin(theta))  # roomier to the north, tighter south
+    base += 16 * math.exp(-(((theta - 1.1) / 0.35) ** 2))  # a wide bay toward the sun: the reference's open left side
     return base + noise.noise(Vector((math.cos(theta) * 2, math.sin(theta) * 2, 3.3))) * 0.9
 
 
 def cliff_height(theta):
-    """How high the cliffs rise above the lake, by direction."""
-    behind = math.exp(-((theta / 0.7) ** 2))
+    """How high the cliffs rise above the lake, by direction. As the reference, seen from the landing: a tall wooded
+    hill on the far left, a low saddle where the sun sets over distant mountains, then a tall spur of cliffs rising to
+    the fall, and the highest walls behind it and to the right."""
+    behind = math.exp(-((theta / (0.7 if theta < 0 else 0.45)) ** 2))  # falling away quickly to the north (left)
     south = math.exp(-(((theta + 1.2) / 0.9) ** 2))
-    north = math.exp(-(((theta - 1.6) / 0.9) ** 2))
-    gap = math.exp(-(((theta - 0.62) / 0.3) ** 2))  # a low saddle toward the sun and the mountains
-    h = 2.5 + 10.5 * behind + 8.5 * south + 4.0 * north
+    north = math.exp(-(((theta - 1.52) / 0.15) ** 2))
+    spur = math.exp(-(((theta - 0.55) / 0.15) ** 2))
+    gap = math.exp(-(((theta - 1.15) / 0.3) ** 2))  # the saddle toward the sun and the mountains
+    h = 2.5 + 10.5 * behind + 8.5 * south + 8.0 * north + 7.0 * spur
     # Pinnacles along the skyline.
-    h += max(0.0, noise.noise(Vector((math.cos(theta) * 6, math.sin(theta) * 6, 9.1)))) * 3.5 * (behind + south + north)
-    return h * (1 - 0.8 * gap)
+    h += max(0.0, noise.noise(Vector((math.cos(theta) * 6, math.sin(theta) * 6, 9.1)))) * 3.5 * (behind + south + north + spur)
+    return h * (1 - 0.45 * gap)
 
 
 def fbm(p, octaves=4):
@@ -232,13 +236,14 @@ link('Landing.Blossom', me)
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 FAR = Color((0.78, 0.6, 0.62))
-for layer, (radius, top) in enumerate(((70, 9), (95, 15))):
-    segs = 160
+for layer, (radius, top) in enumerate(((60, 9), (85, 19), (120, 34))):
+    segs = 220
     rows = []
     for k in range(segs + 1):
         a = 2 * math.pi * k / segs
-        toward_sun = max(0.0, math.cos(a - math.radians(27)))
-        ridge = top * (0.35 + 0.65 * toward_sun) * (0.6 + 0.4 * (fbm(Vector((math.cos(a) * 3, math.sin(a) * 3, layer * 5.0)), 4) + 0.5))
+        # Highest behind the saddle the sun sets over (seen from the landing, round 75 degrees).
+        toward_sun = max(0.0, math.cos(a - math.radians(75))) ** 2
+        ridge = top * (0.3 + 0.7 * toward_sun) * (0.55 + 0.45 * (fbm(Vector((math.cos(a) * 4, math.sin(a) * 4, layer * 5.0)), 5) + 0.5))
         r = radius + layer * 4
         base = Vector((math.cos(a) * r, math.sin(a) * r, LAKE_Z - 2))
         rows.append((bm.verts.new(base), bm.verts.new(base + Vector((0, 0, max(ridge, 1.0) + 2)))))
@@ -255,7 +260,7 @@ link('Landing.Mountains', me)
 # --- The lake ---------------------------------------------------------------------------------------------------------
 
 bm = bmesh.new()
-bmesh.ops.create_circle(bm, cap_ends=True, segments=128, radius=24)
+bmesh.ops.create_circle(bm, cap_ends=True, segments=128, radius=45)
 bmesh.ops.triangulate(bm, faces=bm.faces)
 bmesh.ops.translate(bm, vec=(LAKE_CENTRE.x, LAKE_CENTRE.y, LAKE_Z), verts=bm.verts)
 me = bpy.data.meshes.new('Pool')

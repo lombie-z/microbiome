@@ -50,7 +50,7 @@ void main() {
   if (uSoftness > 0.9) {
     vec2 q = gl_PointCoord * 3.0 + vSeed;
     float b = sNoise(q) * 0.6 + sNoise(q * 2.3) * 0.3 + sNoise(q * 5.1) * 0.1;
-    a *= smoothstep(0.25, 0.75, b + (1.0 - d) * 0.35);
+    a *= smoothstep(0.35, 0.62, b + (1.0 - d) * 0.35);
   }
   gl_FragColor = vec4(uColor, a * vAlpha * uOpacity);
   #include <colorspace_fragment>
@@ -134,9 +134,9 @@ const POOL_Y = -11;
 const FALL_FOOT = 3.2;
 const BRAID_Y = -6.5;
 
-/** Marks a system that only shows at the landing (it fades in with it, in Spray's frame loop). */
-function landingOnly(system: ReturnType<typeof particles>) {
-  system.material.userData.landing = true;
+/** Gives a system an opacity that follows the landing (0 to 1), set in Spray's frame loop. */
+function withLanding(system: ReturnType<typeof particles>, opacity: (landing: number) => number) {
+  system.material.userData.opacity = opacity;
   return system;
 }
 
@@ -182,26 +182,30 @@ export function Spray({ scene }: { scene: Object3D }) {
         },
       }),
       // Mist off the pool, rising and spreading slowly.
-      particles({
-        count: 300,
-        gravity: 0,
-        color: '#fff0e2',
-        opacity: 0.2,
-        softness: 1,
-        emit: (_, start, velocity) => {
-          // A great billowing cloud of mist at the fall's foot, rolling up and out over the lake.
-          const a = Math.random() * Math.PI * 2;
-          const r = FALL_FOOT * 0.6 + Math.random() * 3.5;
-          start.set(Math.cos(a) * r * 0.7, POOL_Y + 0.05 + Math.random() * 0.8, Math.sin(a) * r * 1.1);
-          velocity.set(Math.cos(a) * 0.18, 0.2 + Math.random() * 0.3, Math.sin(a) * 0.18);
-          return { life: 6 + Math.random() * 5, size: 2 + Math.random() * 2.5 };
-        },
-      }),
+      withLanding(
+        particles({
+          count: 300,
+          gravity: 0,
+          color: '#fff0e2',
+          opacity: 0.2,
+          softness: 1,
+          emit: (_, start, velocity) => {
+            // A great billowing cloud of mist at the fall's foot, rolling up and out over the lake.
+            const a = Math.random() * Math.PI * 2;
+            const r = FALL_FOOT * 0.6 + Math.random() * 3.5;
+            start.set(Math.cos(a) * r * 0.7, POOL_Y + 0.05 + Math.random() * 0.8, Math.sin(a) * r * 1.1);
+            velocity.set(Math.cos(a) * 0.18, 0.2 + Math.random() * 0.3, Math.sin(a) * 0.18);
+            return { life: 6 + Math.random() * 5, size: 2 + Math.random() * 2.5 };
+          },
+        }),
+        // The landing's mist bank takes over from this broad haze.
+        (landing) => 0.2 * (1 - 0.8 * landing)
+      ),
       // At the landing: a bank of mist rolling off the fall's foot and along the cliffs' base, lit by the low sun (the
       // reference's great white billows). Only visible from afar, so it fades in with the landing.
-      landingOnly(
+      withLanding(
         particles({
-          count: Math.round(260 * share),
+          count: Math.round(520 * share),
           gravity: 0,
           color: '#fff3e6',
           opacity: 0,
@@ -212,9 +216,10 @@ export function Spray({ scene }: { scene: Object3D }) {
             const height = Math.random() ** 2.5 * 3.4 * (1 - Math.abs(along) / 12);
             start.set(-1.2 + Math.random() * 2.8, POOL_Y + 0.2 + height, along);
             velocity.set((Math.random() - 0.5) * 0.12, 0.08 + Math.random() * 0.12, (Math.random() - 0.5) * 0.25);
-            return { life: 9 + Math.random() * 6, size: 1.6 + Math.random() * 2.4 };
+            return { life: 9 + Math.random() * 6, size: 0.9 + Math.random() * 1.8 };
           },
-        })
+        }),
+        (landing) => 0.42 * landing
       ),
       // A softer haze where the streams braid into one.
       particles({
@@ -238,7 +243,7 @@ export function Spray({ scene }: { scene: Object3D }) {
     for (const { material } of systems) {
       material.uniforms.uTime.value = state.clock.elapsedTime;
       // The landing's mist bank (opacity 0 at rest) fades in as the camera arrives.
-      if (material.userData.landing) material.uniforms.uOpacity.value = 0.3 * landingAt(journey.frame);
+      if (material.userData.opacity) material.uniforms.uOpacity.value = material.userData.opacity(landingAt(journey.frame));
       material.uniforms.uScale.value = state.size.height * state.viewport.dpr * 0.5;
     }
   });

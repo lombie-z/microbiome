@@ -71,6 +71,13 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         colour: 'diffuseColor.rgb *= 0.82 + 0.36 * lNoise(vLandingPos * 140.0);',
         light: BACKLIT(0.5),
       });
+    case 'Mountains': {
+      // A ring of ridges seen from inside it: both faces, matte, left to the fog to fade into layers.
+      const material = source.clone();
+      material.side = DoubleSide;
+      material.roughness = 1;
+      return material;
+    }
     case 'Shrubs':
     case 'Blossom':
       return foliageMaterial(source);
@@ -105,15 +112,27 @@ export function foliageMaterial(source?: MeshStandardMaterial) {
   material.name = source?.name ?? 'Foliage';
   material.onBeforeCompile = (shader) => {
     const varyings = 'varying vec3 vLeafPos;';
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>\n${varyings}`).replace(
-      '#include <worldpos_vertex>',
-      /* glsl */ `#include <worldpos_vertex>
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${varyings}\n${NOISE}`)
+      .replace(
+        '#include <begin_vertex>',
+        /* glsl */ `#include <begin_vertex>
+// Lumpy, irregular crowns rather than balls: each clump pushed in and out by its own noise.
+#ifdef USE_INSTANCING
+transformed += objectNormal * (lNoise(position * 2.4 + instanceMatrix[3].xyz * 3.0) - 0.45) * 0.75;
+#else
+transformed += objectNormal * (lNoise(position * 6.0) - 0.45) * 0.12;
+#endif`
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        /* glsl */ `#include <worldpos_vertex>
 vec4 leafPos = vec4(transformed, 1.0);
 #ifdef USE_INSTANCING
 leafPos = instanceMatrix * leafPos;
 #endif
 vLeafPos = (modelMatrix * leafPos).xyz;`
-    );
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${varyings}\n${NOISE}`)
       .replace(

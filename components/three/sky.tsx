@@ -12,7 +12,7 @@ export const PLASTER = new Color('#f5f2ed');
 const SKY_TOP = new Color('#c9a9c2');
 const SKY_HORIZON = new Color('#ffd49c');
 const SUN_GLOW = new Color('#ffcf88');
-const CLOUD_LIT = new Color('#ffd6a6');
+const CLOUD_LIT = new Color('#ffc4a4');
 const CLOUD_SHADE = new Color('#c48fa3');
 const WARM_LIGHT = new Color('#ffcba3');
 /** Where the sun sits (art/build-sky.py), in three.js space (y up). */
@@ -54,29 +54,47 @@ float fbm3(vec3 p) {
   for (int i = 0; i < 5; i++) { v += a * vnoise3(p); p = p * 2.07 + 5.3; a *= 0.5; }
   return v;
 }
-float clouds(vec3 d) {
-  // Flattened toward the horizon (clouds are layers, seen edge-on far away), drifting slowly.
-  vec3 p = vec3(d.x, d.y * 2.6, d.z) * 3.2 + vec3(uTime * 0.01, 0.0, 0.0);
-  p += vec3(fbm3(p * 0.7 + 9.0), 0.0, fbm3(p * 0.7 + 17.0)) * 0.8;  // billows, not streaks
-  return fbm3(p);
+// Clouds on a layer overhead, seen in perspective (shrinking and crowding toward the horizon, as real cloud fields do):
+// p is where the view ray meets the layer.
+vec2 cloudPlane(vec3 d) { return d.xz / (max(d.y, 0.0) + 0.22) * 1.6 + vec2(uTime * 0.012, 0.0); }
+float clouds(vec2 q) {
+  // Domain-warped so they billow into heaps rather than streak.
+  vec3 p = vec3(q, 0.0);
+  p.xy += vec2(fbm3(p * 0.5 + 9.0), fbm3(p * 0.5 + 17.0)) * 0.45;
+  float base = fbm3(p * 1.5);
+  // Cauliflower detail on the edges: small heaps where the cloud is thin.
+  return base + (fbm3(p * 6.0 + 3.0) - 0.5) * 0.16 * (1.0 - smoothstep(0.5, 0.65, base));
 }
 void main() {
   vec3 d = normalize(vDirection);
   vec3 sky = mix(uHorizon, uTop, smoothstep(-0.02, 0.32, d.y));
   float toward = max(dot(d, uSun), 0.0);
-  // A wide warm haze around the sun and a brighter halo close in (the sun disc itself is a mesh, for the rays).
   // A soft wide glow and a small hot core (the disc itself is a mesh, so the light rays have a source).
-  sky += uGlow * (pow(toward, 8.0) * 0.3 + pow(toward, 90.0) * 0.5 + pow(toward, 900.0) * 3.0);
-  // Soft drifting clouds on a dome overhead: lit gold toward the sun, rosy away from it, thinning to the horizon.
-  // Clouds across the whole sky: rose-gold bodies, gold where they face the sun (density sampled a step toward it is
-  // lower there), lavender-grey in their shadowed undersides, glowing near the sun; thinning into the horizon haze.
-  float body = clouds(d);
-  float c = smoothstep(0.46, 0.62, body);
-  float lit = clamp((body - clouds(normalize(d + uSun * 0.035))) * 6.0 + 0.5, 0.0, 1.0);
+  sky += uGlow * (pow(toward, 6.0) * 0.45 + pow(toward, 60.0) * 0.9 + pow(toward, 900.0) * 4.0);
+  // A starburst round the sun, as a camera sees it: thin rays of uneven length.
+  {
+    vec3 t1 = normalize(cross(uSun, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(t1, uSun);
+    vec3 v = d - uSun * dot(d, uSun);
+    float ang = atan(dot(v, t2), dot(v, t1));
+    float rays = pow(abs(cos(ang * 7.0)), 60.0) * (0.5 + 0.5 * hash3(vec3(floor(ang * 7.0 / 3.14159 + 0.5))));
+    rays += pow(abs(cos(ang * 11.0 + 0.4)), 120.0) * 0.6;
+    sky += uGlow * rays * pow(toward, 400.0) * 3.0;
+  }
+  // Heaped clouds over half the sky: mauve-rose cores, gold where they face the low sun (the layer's density a step
+  // toward the sun is lower there), bright silver linings near it; thinning into the horizon haze.
+  vec2 q = cloudPlane(d);
+  float body = clouds(q);
+  // Fewer clouds low down, toward the sun's clear glow.
+  float c = smoothstep(0.5, 0.535, body + 0.06 * smoothstep(0.05, 0.3, d.y) - 0.08 * smoothstep(0.6, 0.95, toward));
+  vec2 toSun = normalize(uSun.xz + 1e-4);
+  float lit = clamp((body - clouds(q + toSun * 0.09)) * 5.0 + 0.45, 0.0, 1.0);
   vec3 cloud = mix(uCloudShade, uCloudLit, lit);
-  cloud = mix(cloud, uCloudShade * 0.85, smoothstep(0.62, 0.8, body) * (1.0 - lit) * 0.6);
-  cloud += uGlow * (pow(toward, 3.0) * 0.7 + pow(toward, 14.0) * 0.9) * (0.4 + lit);
-  sky = mix(sky, cloud, c * smoothstep(-0.01, 0.08, d.y));
+  // Thick cores darker, thin edges glowing where the sun is behind them.
+  cloud *= mix(1.0, 0.72, smoothstep(0.58, 0.78, body));
+  float edge = 1.0 - smoothstep(0.5, 0.6, body);
+  cloud += uGlow * (pow(toward, 4.0) * 0.35 + pow(toward, 16.0) * 1.0) * (0.3 + lit + edge * 1.5);
+  sky = mix(sky, cloud, c * smoothstep(0.0, 0.1, d.y));
   if (uDebug > 0.5) sky = vec3(c, body, lit);
   gl_FragColor = vec4(sky, uOpacity);
   #include <colorspace_fragment>

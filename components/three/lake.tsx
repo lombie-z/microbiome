@@ -11,7 +11,7 @@ import { SUN_POSITION } from './sky';
 // the cliffs, the fall and the low sun, as in the reference. three's Reflector renders the mirrored view; this shader
 // ripples it slightly, mixes in the water's own colour where you look down into it, and scatters sun sparkles.
 const CENTRE = new Vector3(-5, -11, 0);
-const RADIUS = 24;
+const RADIUS = 45;
 
 const LakeShader = {
   name: 'LakeShader',
@@ -81,7 +81,7 @@ export function Lake() {
   const light = isLightDevice();
   const lake = useMemo(() => {
     const size = light ? 512 : 1024;
-    const mirror = new Reflector(new CircleGeometry(RADIUS, 96), { textureWidth: size, textureHeight: size, clipBias: 0.003, shader: LakeShader });
+    const mirror = new Reflector(new CircleGeometry(RADIUS, 128), { textureWidth: size, textureHeight: size, clipBias: 0.003, shader: LakeShader });
     mirror.name = 'Lake';
     mirror.position.copy(CENTRE);
     mirror.rotation.x = -Math.PI / 2;
