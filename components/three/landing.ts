@@ -26,7 +26,8 @@ type Patch = {
   roughness?: string;
   normal?: string;
   light?: string;
-  // Extra uniforms, and declarations for the fragment shader.
+  // Extra uniforms, declarations for the fragment shader, and for the vertex shader.
+  vertexHeader?: string;
   uniforms?: Record<string, { value: unknown }>;
   header?: string;
 };
@@ -42,7 +43,7 @@ function physical(source: MeshStandardMaterial, settings: Partial<MeshPhysicalMa
     Object.assign(shader.uniforms, patch.uniforms);
     const varyings = 'varying vec3 vLandingPos;\nuniform float uTime;';
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${varyings}`)
+      .replace('#include <common>', `#include <common>\n${varyings}\n${patch.vertexHeader ?? ''}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${patch.vertex ?? ''}`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvLandingPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
@@ -101,7 +102,11 @@ export function landingMaterial(source: MeshStandardMaterial): Material | null {
   switch (source.name) {
     case 'Reed':
       return physical(source, { roughness: 0.45, sheen: 0.6, sheenColor: source.color.clone().setRGB(1, 0.85, 0.5), side: DoubleSide }, 'reed', {
+        // The blades' margins (art/build-landing.py marks them 1, the midrib 0).
+        vertexHeader: 'attribute float _edge;\nvarying float vEdge;',
+        header: 'varying float vEdge;',
         vertex: /* glsl */ `
+vEdge = _edge;
 float bed = 1.0 - smoothstep(1.2, 2.2, length(transformed.xz - vec2(${REED_BED})));
 float h = max(transformed.y + 11.0, 0.0);
 float sway = bed * h * h * 0.03;
@@ -116,6 +121,14 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
         light: `${BACKLIT(1.4)}
 totalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.2, 0.08) * step(diffuseColor.r, diffuseColor.g);
+// Blade edges glisten: a fine bright line along each margin where the low sun catches it, broken into beads of
+// light along its length.
+if (diffuseColor.g > diffuseColor.r) {
+  float margin = smoothstep(0.7, 0.97, vEdge);
+  float beads = 0.35 + 0.65 * smoothstep(0.4, 0.8, lNoise(vLandingPos * vec3(60.0, 220.0, 60.0)));
+  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+  totalEmissiveRadiance += vec3(1.0, 0.82, 0.48) * margin * beads * (0.6 + 1.4 * rim) * 3.2;
+}
 // Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
 if (diffuseColor.r > diffuseColor.g) {
   vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
