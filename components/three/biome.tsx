@@ -16,7 +16,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, belowVisible, journey, landingAt, smoothstep } from '@/lib/journey';
+import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -83,10 +83,16 @@ function rainbowMaterial() {
     uniforms: { uOpacity: { value: 0 } },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
-      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      varying float vY;
+      void main() {
+        vUv = uv;
+        vY = (modelMatrix * vec4(position, 1.0)).y;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
     fragmentShader: /* glsl */ `
       uniform float uOpacity;
       varying vec2 vUv;
+      varying float vY;
       vec3 spectrum(float x) {
         vec3 c[6] = vec3[6](vec3(0.95, 0.25, 0.3), vec3(1.0, 0.55, 0.2), vec3(1.0, 0.86, 0.3), vec3(0.35, 0.78, 0.42), vec3(0.3, 0.55, 0.95), vec3(0.55, 0.38, 0.9));
         float f = clamp(x, 0.0, 0.999) * 5.0;
@@ -94,6 +100,8 @@ function rainbowMaterial() {
         return mix(c[i], c[min(i + 1, 5)], fract(f));
       }
       void main() {
+        // Nothing of it below the lake's surface.
+        if (vY < -11.0) discard;
         float along = 1.0 - vUv.y;
         // pow() of a negative is NaN (and bloom smears one NaN pixel over the whole screen), so clamp first.
         float a = pow(max(sin(3.14159 * vUv.x), 0.0), 0.6) * pow(max(sin(3.14159 * along), 0.0), 0.8) * uOpacity * 0.7;
@@ -150,6 +158,9 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         rainbow.current = rainbowMaterial();
         mesh.material = rainbow.current;
         mesh.renderOrder = 3;
+        // On its own layer, which the camera draws but the lake's mirror camera (see components/three/lake.tsx) doesn't: a lake doesn't
+        // reflect a rainbow where a mirror would put it.
+        mesh.layers.set(RAINBOW_LAYER);
       } else if (name === 'Sun') {
         // Brighter than white so the bloom catches it; the light rays need it transparent and not writing depth.
         mesh.material = new MeshBasicMaterial({
@@ -236,6 +247,9 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   useEffect(() => {
     if (sun.current) onSun(sun.current);
   }, [onSun]);
+  useEffect(() => {
+    camera.layers.enable(RAINBOW_LAYER);
+  }, [camera]);
 
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;

@@ -2,9 +2,9 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
-import { CircleGeometry, Color, Vector3 } from 'three';
+import { type Camera, CircleGeometry, Color, Vector3 } from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
-import { belowVisible, isLightDevice, journey } from '@/lib/journey';
+import { belowVisible, isLightDevice, journey, RAINBOW_LAYER } from '@/lib/journey';
 import { SUN_POSITION } from './sky';
 
 // The lake under the landing (art/build-landing.py LAKE_CENTRE, LAKE_Z; Blender's -y is three's z): a still mirror of
@@ -102,6 +102,8 @@ export function Lake() {
   useFrame((state) => {
     const uniforms = (lake.material as unknown as { uniforms: Record<string, { value: unknown }> }).uniforms;
     lake.visible = belowVisible(journey.frame);
+    // Its mirror camera is a clone of the main one, layers and all: leave the rainbow out of the reflection.
+    (lake as Reflector & { getReflectionCamera: (c: Camera) => Camera }).getReflectionCamera(state.camera).layers.disable(RAINBOW_LAYER);
     uniforms.uTime.value = state.clock.elapsedTime;
     (uniforms.uSun.value as Vector3).copy(SUN_POSITION);
   });

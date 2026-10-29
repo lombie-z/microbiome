@@ -49,4 +49,7 @@ export const isLightDevice = () => typeof window !== 'undefined' && (window.matc
  */
 export const belowVisible = (frame: number) => frame > BEATS.fogIn;
 
+/** The render layer the rainbow lives on: the camera draws it, the lake's mirror doesn't. */
+export const RAINBOW_LAYER = 2;
+
 export const landingAt = (frame: number) => smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], frame);
