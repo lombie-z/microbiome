@@ -470,13 +470,13 @@ FROG_LIMBS = [
     # Sitting up as the reference's: back sloping steeply from the rump to the shoulders, head held high.
     ((-0.1, 0, 0.06), 0.068, (0.04, 0, 0.14), 0.08),  # body, rising to the shoulders
     ((-0.05, 0, 0.05), 0.06, (0.06, 0, 0.09), 0.062),  # belly
-    ((0.04, 0, 0.14), 0.076, (0.11, 0, 0.18), 0.058),  # shoulders into the head
-    ((0.11, 0, 0.18), 0.058, (0.215, 0, 0.158), 0.026),  # the long flat head narrowing to the snout
-    ((0.09, 0, 0.14), 0.054, (0.19, 0, 0.142), 0.03),  # throat and jaw
+    ((0.04, 0, 0.14), 0.078, (0.11, 0, 0.19), 0.062),  # shoulders into the head
+    ((0.11, 0, 0.19), 0.062, (0.185, 0, 0.175), 0.03),  # the broad head narrowing to the snout
+    ((0.09, 0, 0.145), 0.058, (0.16, 0, 0.152), 0.033),  # throat and jaw
 ]
 for side in (-1, 1):
     FROG_LIMBS += [
-        ((0.13, 0.042 * side, 0.215), 0.03, (0.14, 0.046 * side, 0.226), 0.027),  # eye bulge, high on the head
+        ((0.115, 0.045 * side, 0.222), 0.034, (0.124, 0.05 * side, 0.232), 0.031),  # eye bulge
         ((-0.02, 0.052 * side, 0.175), 0.016, (-0.09, 0.05 * side, 0.1), 0.014),  # dorsolateral ridge
         ((-0.1, 0.055 * side, 0.055), 0.05, (0.0, 0.095 * side, 0.06), 0.034),  # thigh, forward to the knee
         ((0.0, 0.095 * side, 0.06), 0.032, (-0.075, 0.105 * side, 0.022), 0.022),  # shin, back to the ankle
@@ -554,8 +554,8 @@ PUPIL = Color((0.02, 0.015, 0.01))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 for side in (-1, 1):
-    centre_local = Vector((0.142, 0.052 * side, 0.232))
-    r = 0.024
+    centre_local = Vector((0.124, 0.06 * side, 0.236))
+    r = 0.028
     geom = bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=1)
     out = Vector((0.35, side * 1.0, 0.25)).normalized()
     for v in geom['verts']:
