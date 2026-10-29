@@ -127,7 +127,7 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
         // The low sun shining through the leaf from behind lights it from within, gold-green; and the wet surface
         // glitters, a scatter of tiny points of sun.
         light: `${SUN_SHEEN(14.0, 0.9)}${SUN_SHEEN(4.0, 0.35)}
-totalEmissiveRadiance += diffuseColor.rgb * vec3(0.7, 0.58, 0.22);
+totalEmissiveRadiance += diffuseColor.rgb * vec3(0.95, 0.8, 0.25);
 {
   float fleck = smoothstep(0.86, 0.97, lNoise(vLandingPos * 140.0)) * smoothstep(0.3, 0.7, lNoise(vLandingPos * 9.0 + 4.0));
   totalEmissiveRadiance += vec3(1.0, 0.8, 0.5) * fleck * 5.0;

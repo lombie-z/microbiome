@@ -133,7 +133,7 @@ export function MistBank() {
     const landing = landingAt(journey.frame);
     material.uniforms.uTime.value = state.clock.elapsedTime;
     // Cards read as billows only from low down: they thin out as the camera rises for the pull-back.
-    material.uniforms.uOpacity.value = 0.9 * landing * (1 - 0.75 * smoothstep(800, 860, journey.frame));
+    material.uniforms.uOpacity.value = 0.72 * landing * (1 - 0.75 * smoothstep(800, 860, journey.frame));
   });
 
   return <mesh name="SprayMistBank" geometry={geometry} material={material} frustumCulled={false} renderOrder={5} />;
