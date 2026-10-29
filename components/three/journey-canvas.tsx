@@ -6,6 +6,7 @@ import { type RefObject, Suspense, useEffect, useRef, useState } from 'react';
 import type { Mesh } from 'three';
 import { devFlag as flag, isLightDevice, journey, pixelSize } from '@/lib/journey';
 import { Biome } from './biome';
+import { Dog } from './dog';
 import { Effects } from './effects';
 import { JourneyCamera } from './journey-camera';
 import { Lake } from './lake';
@@ -115,6 +116,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
       {!flag('nolake') && <Lake />}
       <Suspense fallback={null}>
         <Biome onReady={onReady} onSun={setSun} />
+        <Dog />
       </Suspense>
       {flag('nofx') ? <Render /> : <Effects sun={light ? null : sun} pixel={pixel} />}
     </Canvas>
