@@ -117,6 +117,10 @@ void main() {
   float a = uLanding * edge * mix(0.45, 1.0, body) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(q.x));
   vec3 c = vec3(1.35, 1.24, 1.08) * mix(0.45, 1.15, body) * mix(1.0, 0.86, vUv.x);
   c += vec3(0.35, 0.3, 0.25) * clumps;
+  // The low sun from the left: the main column's sunward edge glows gold, and light comes through where it's thin.
+  float sunward = 1.0 - smoothstep(0.02, 0.2, q.x);
+  c += vec3(0.6, 0.42, 0.18) * sunward * body;
+  c += vec3(0.5, 0.36, 0.2) * (1.0 - body) * 0.6;
   // Glitter: droplets in the ropes flashing in the low sun, bright enough to bloom.
   float glitter = smoothstep(0.8, 0.95, fNoise(vec2(vUv.x * 520.0, vUv.y * 70.0 + uTime * 7.0))) * smoothstep(0.45, 0.75, ropes);
   c += vec3(1.6, 1.35, 1.0) * glitter;
