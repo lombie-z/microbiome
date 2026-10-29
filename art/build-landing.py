@@ -423,31 +423,34 @@ finish('Landing.Lilies', bm, material('Lily', 0.5))
 
 # The frog: one smooth body, sitting up on the big pad side-on, looking right toward the fall. Built as a skeleton of
 # tapering limbs (chains of spheres), fused into one skin by a voxel remesh and smoothed so the joins flow.
-FROG_BACK = Color((0.36, 0.33, 0.14))
-FROG_SIDE = Color((0.56, 0.5, 0.26))
+FROG_BACK = Color((0.34, 0.31, 0.16))
+FROG_SIDE = Color((0.52, 0.47, 0.27))
 FROG_SPOT = Color((0.2, 0.18, 0.08))
-FROG_BELLY = Color((0.9, 0.84, 0.62))
+FROG_BELLY = Color((0.93, 0.88, 0.74))
+FROG_RIDGE = Color((0.66, 0.6, 0.38))
 FROG_BASE = at(530, 828) + Vector((0, 0, 0.018))
 FROG_FACING = math.radians(-62)  # nose toward the fall, a little away from the camera
 FROG_SIZE = px_size(FROG_BASE, 170) / 0.36  # the reference's frog is about 170 px long; the model is 0.36 m
 
 # (start, start radius, end, end radius) in the frog's frame: x forward (nose), y left, z up.
 FROG_LIMBS = [
-    ((-0.11, 0, 0.065), 0.07, (0.03, 0, 0.115), 0.085),  # body, rising to the shoulders
-    ((-0.06, 0, 0.05), 0.06, (0.05, 0, 0.07), 0.065),  # belly
-    ((0.03, 0, 0.115), 0.085, (0.11, 0, 0.152), 0.066),  # shoulders into the head
-    ((0.11, 0, 0.152), 0.066, (0.185, 0, 0.142), 0.034),  # the broad head narrowing to the snout
-    ((0.1, 0, 0.115), 0.06, (0.16, 0, 0.118), 0.035),  # throat and jaw
+    # Sitting up as the reference's: back sloping steeply from the rump to the shoulders, head held high.
+    ((-0.1, 0, 0.06), 0.068, (0.04, 0, 0.14), 0.08),  # body, rising to the shoulders
+    ((-0.05, 0, 0.05), 0.06, (0.06, 0, 0.09), 0.062),  # belly
+    ((0.04, 0, 0.14), 0.078, (0.11, 0, 0.19), 0.062),  # shoulders into the head
+    ((0.11, 0, 0.19), 0.062, (0.185, 0, 0.175), 0.03),  # the broad head narrowing to the snout
+    ((0.09, 0, 0.145), 0.058, (0.16, 0, 0.152), 0.033),  # throat and jaw
 ]
 for side in (-1, 1):
     FROG_LIMBS += [
-        ((0.115, 0.045 * side, 0.185), 0.032, (0.125, 0.05 * side, 0.195), 0.03),  # eye bulge
-        ((-0.1, 0.055 * side, 0.06), 0.05, (0.0, 0.095 * side, 0.065), 0.034),  # thigh, forward to the knee
-        ((0.0, 0.095 * side, 0.065), 0.032, (-0.075, 0.105 * side, 0.025), 0.022),  # shin, back to the ankle
-        ((-0.075, 0.105 * side, 0.02), 0.02, (0.03, 0.14 * side, 0.01), 0.011),  # long hind foot, splayed forward
+        ((0.115, 0.045 * side, 0.222), 0.034, (0.124, 0.05 * side, 0.232), 0.031),  # eye bulge
+        ((-0.02, 0.052 * side, 0.175), 0.016, (-0.09, 0.05 * side, 0.1), 0.014),  # dorsolateral ridge
+        ((-0.1, 0.055 * side, 0.055), 0.05, (0.0, 0.095 * side, 0.06), 0.034),  # thigh, forward to the knee
+        ((0.0, 0.095 * side, 0.06), 0.032, (-0.075, 0.105 * side, 0.022), 0.022),  # shin, back to the ankle
+        ((-0.075, 0.105 * side, 0.018), 0.02, (0.03, 0.14 * side, 0.01), 0.011),  # long hind foot, splayed forward
         ((0.03, 0.14 * side, 0.01), 0.011, (0.06, 0.16 * side, 0.008), 0.007),  # toes
-        ((0.1, 0.05 * side, 0.105), 0.026, (0.15, 0.06 * side, 0.015), 0.017),  # front leg
-        ((0.15, 0.06 * side, 0.012), 0.016, (0.185, 0.075 * side, 0.008), 0.008),  # hand
+        ((0.09, 0.05 * side, 0.13), 0.026, (0.14, 0.06 * side, 0.015), 0.017),  # front leg, straight down
+        ((0.14, 0.06 * side, 0.012), 0.016, (0.18, 0.08 * side, 0.008), 0.008),  # hand
     ]
 bm = bmesh.new()
 for a, ra, b, rb in FROG_LIMBS:
@@ -481,17 +484,26 @@ col = bm.loops.layers.color.new('Col')
 
 
 def frog_colour(co):
-    # co is in the frog's local frame (before placing it).
-    belly = smoothstep(0.1, 0.03, co.z - 0.25 * max(co.x, 0)) * smoothstep(0.03, 0.0, abs(co.y) - 0.05)
-    throat = smoothstep(0.03, -0.01, co.z - 0.1 - 0.4 * (co.x - 0.12)) * smoothstep(0.08, 0.16, co.x)
-    top = smoothstep(0.03, 0.08, abs(co.y)) * 0.0 + smoothstep(0.06, 0.16, co.z)
-    c = mix(FROG_SIDE, FROG_BACK, top * 0.8)
-    spots = smoothstep(0.25, 0.45, noise.noise(co * 32 + Vector((3, 1, 7))))
-    c = mix(c, FROG_SPOT, spots * 0.75 * smoothstep(0.03, 0.1, co.z))
-    # The dark band from the eye back over the eardrum, and a pale lip line.
-    band = smoothstep(0.02, 0.0, abs(co.z - 0.165 + 0.3 * (co.x - 0.1))) * smoothstep(0.0, 0.05, 0.16 - abs(co.x - 0.05)) * smoothstep(0.04, 0.07, abs(co.y))
-    c = mix(c, FROG_SPOT, band * 0.6)
-    return mix(c, FROG_BELLY, max(belly, throat) * 0.85)
+    # co is in the frog's local frame (before placing it). Cream belly and throat up the lower flank (a line rising
+    # toward the head), olive-brown back with dark blotches, a pale ridge down each side, a dark mask behind the eye
+    # over the eardrum, and a pale lip line.
+    line = 0.06 + 0.5 * max(co.x + 0.06, 0.0)
+    belly = smoothstep(0.012, -0.012, co.z - line)
+    # (Not on the legs: banded olive like the back.)
+    leg = smoothstep(0.062, 0.078, abs(co.y)) * smoothstep(0.05, 0.02, co.x)
+    belly *= 1.0 - leg
+    c = mix(FROG_SIDE, FROG_BACK, smoothstep(line, line + 0.08, co.z))
+    spots = smoothstep(0.28, 0.48, noise.noise(co * 30 + Vector((3, 1, 7))))
+    c = mix(c, FROG_SPOT, spots * 0.7 * smoothstep(line, line + 0.03, co.z))
+    ridge = smoothstep(0.012, 0.0, abs(abs(co.y) - 0.062)) * smoothstep(-0.1, -0.05, co.x) * smoothstep(0.06, 0.0, co.x) * smoothstep(0.08, 0.12, co.z)
+    c = mix(c, FROG_RIDGE, ridge * 0.7)
+    mask = smoothstep(0.018, 0.0, abs(co.z - 0.205 + 0.35 * (co.x - 0.1))) * smoothstep(0.0, 0.03, 0.06 - abs(co.x - 0.07)) * smoothstep(0.035, 0.055, abs(co.y))
+    c = mix(c, FROG_SPOT, mask * 0.65)
+    lip = smoothstep(0.006, 0.0, abs(co.z - (0.165 - 0.12 * (co.x - 0.12)))) * smoothstep(0.1, 0.13, co.x)
+    c = mix(c, FROG_BELLY, lip * 0.8)
+    bands = smoothstep(0.35, 0.6, math.sin(co.x * 90 + co.z * 40) * 0.5 + 0.5 + noise.noise(co * 40) * 0.3)
+    c = mix(c, mix(FROG_SIDE, FROG_SPOT, bands * 0.35), leg)
+    return mix(c, FROG_BELLY, belly * 0.9)
 
 
 for f in bm.faces:
@@ -503,14 +515,14 @@ for v in bm.verts:
 finish('Landing.Frog', bm, material('Frog', 0.3))
 
 # Its eyes: gold, glossy, with a black horizontal pupil looking out to the side.
-EYE_GOLD = Color((0.95, 0.66, 0.18))
+EYE_GOLD = Color((0.78, 0.68, 0.36))
 EYE_RIM = Color((0.35, 0.22, 0.06))
 PUPIL = Color((0.02, 0.015, 0.01))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 for side in (-1, 1):
-    centre_local = Vector((0.124, 0.054 * side, 0.2))
-    r = 0.026
+    centre_local = Vector((0.124, 0.06 * side, 0.236))
+    r = 0.028
     geom = bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=1)
     out = Vector((0.35, side * 1.0, 0.25)).normalized()
     for v in geom['verts']:

@@ -129,9 +129,9 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
     case 'Frog':
       // Wet skin: glossy, with fine bumps darkening and lightening the mottling, rimmed by the low sun behind it.
       return physical(source, { roughness: 0.28, clearcoat: 0.9, clearcoatRoughness: 0.2 }, 'frog', {
-        colour: 'diffuseColor.rgb *= (0.82 + 0.36 * lNoise(vLandingPos * 140.0)) * vec3(1.02, 0.98, 0.88);',
+        colour: 'diffuseColor.rgb *= (0.86 + 0.28 * lNoise(vLandingPos * 140.0));',
         normal: BUMP('lNoise(vLandingPos * 160.0)', 0.0015),
-        light: `${SUN_SHEEN(24.0, 1.4)}${BACKLIT(1.4)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.17, 0.1);`,
+        light: `${SUN_SHEEN(24.0, 1.4)}${BACKLIT(0.8)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.18, 0.14);`,
       });
     case 'Dew':
       // Clear beads of water: you see the pad through them, and each holds a hot point of the sun.
