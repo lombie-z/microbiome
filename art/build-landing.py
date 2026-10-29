@@ -373,6 +373,9 @@ PAD_EDGE = Color((0.78, 0.55, 0.14))
 PADS = [(520, 852, 330), (130, 765, 130), (150, 722, 95), (385, 722, 115), (80, 838, 120), (300, 674, 135), (430, 646, 60),
         (545, 641, 40), (205, 652, 55), (1150, 738, 95), (1235, 746, 55), (1245, 653, 40), (90, 965, 210), (330, 925, 110),
         (640, 650, 45), (40, 700, 60)]
+# Where the frog sits (as below), so its pad can carry the frog's soft contact shadow.
+FROG_SPOT_AT = at(530, 828)
+FROG_SHADOW_R = px_size(FROG_SPOT_AT, 95)
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 pad_centres = []
@@ -411,7 +414,11 @@ for k, (px, py, half) in enumerate(PADS):
         lit = smoothstep(-0.3, 0.6, noise.noise(co * 1.7 + centre)) * 0.6 + 0.4 * smoothstep(0.3, 1.0, -d.y / r)
         c = mix(PAD, PAD_LIT, lit)
         c = mix(c, PAD_VEIN, vein * 0.6 * smoothstep(0.1, 0.4, t))
-        return mix(c, PAD_EDGE, smoothstep(0.88, 1.0, t) * 0.85)
+        c = mix(c, PAD_EDGE, smoothstep(0.88, 1.0, t) * 0.85)
+        # Occlusion under the frog: darkest at its feet, fading out over its own length, stretched away from the sun.
+        off = co.xy - FROG_SPOT_AT.xy
+        shade = 1 - smoothstep(0.0, FROG_SHADOW_R, (Vector((off.x * 0.8, off.y * 1.3))).length)
+        return mix(c, Color((0.04, 0.07, 0.02)), shade * 0.75)
 
     colour_faces(bm, verts, col, pad_colour)
 finish('Landing.Pads', bm, material('Pad', 0.4))
