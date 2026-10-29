@@ -1,4 +1,5 @@
 import { Color, DoubleSide, type Material, MeshPhysicalMaterial, type MeshStandardMaterial } from 'three';
+import { scan, TRIPLANAR } from './scans';
 import { waterTime } from './water';
 
 // Materials for the landing's foreground (art/build-landing.py): the colour lives in the meshes' vertex colours; these
@@ -19,7 +20,16 @@ float lNoise(vec3 p) {
 // The reed bed's foot (Blender's REED_BED, in three's x/z): the taller a blade, the further it sways.
 const REED_BED = '-23.1, 3.24';
 
-type Patch = { vertex?: string; colour?: string; normal?: string; light?: string };
+type Patch = {
+  vertex?: string;
+  colour?: string;
+  roughness?: string;
+  normal?: string;
+  light?: string;
+  // Extra uniforms, and declarations for the fragment shader.
+  uniforms?: Record<string, { value: unknown }>;
+  header?: string;
+};
 
 function physical(source: MeshStandardMaterial, settings: Partial<MeshPhysicalMaterial>, key: string, patch: Patch) {
   // The studio environment (a white room, for the clay hero) would gloss everything here grey; the sun sheen and the
@@ -29,14 +39,16 @@ function physical(source: MeshStandardMaterial, settings: Partial<MeshPhysicalMa
   material.userData.envMapIntensity = material.envMapIntensity;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = waterTime;
+    Object.assign(shader.uniforms, patch.uniforms);
     const varyings = 'varying vec3 vLandingPos;\nuniform float uTime;';
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${varyings}`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>\n${patch.vertex ?? ''}`)
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvLandingPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${varyings}\n${NOISE}`)
+      .replace('#include <common>', `#include <common>\n${varyings}\n${NOISE}\n${patch.header ?? ''}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${patch.colour ?? ''}`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${patch.roughness ?? ''}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${patch.normal ?? ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${patch.light ?? ''}`);
   };
@@ -142,22 +154,35 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
       return physical(source, { roughness: 0.5, side: DoubleSide }, 'lily', {
         light: `${BACKLIT(0.8)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.45, 0.38, 0.36);`,
       });
-    case 'Pebble':
-      // Wet granite as the reference's: grey-brown, finely speckled, rough-grained, glittering where the sun catches it.
+    case 'Pebble': {
+      // Wet granite: Poly Haven's scanned rock_boulder_dry, projected from three sides (the stones have no UVs) and
+      // recoloured by each stone's own tone; glittering where the sun catches it.
+      const granite = scan('rock_boulder_dry');
+      const projection = /* glsl */ `
+  vec3 nW = normalize((vec4(vNormal, 0.0) * viewMatrix).xyz);
+  vec3 w = triWeights(nW);
+  vec3 pp = vLandingPos / 0.6;`;
       return physical(source, { roughness: 0.45, clearcoat: 0.8, clearcoatRoughness: 0.25 }, 'pebble', {
+        uniforms: {
+          uGraniteDiff: { value: granite.diff },
+          uGraniteNor: { value: granite.nor },
+          uGraniteRough: { value: granite.rough },
+          uGraniteMean: { value: granite.mean },
+        },
+        header: `uniform sampler2D uGraniteDiff, uGraniteNor, uGraniteRough;\nuniform vec3 uGraniteMean;\n${TRIPLANAR}`,
         colour: /* glsl */ `
 {
-  vec3 p = vLandingPos * 260.0;
-  float speck = smoothstep(0.7, 0.8, lNoise(p));
-  float pale = smoothstep(0.72, 0.85, lNoise(p * 1.7 + 5.0));
-  float mottle = lNoise(vLandingPos * 14.0) * 0.6 + lNoise(vLandingPos * 40.0) * 0.4;
-  diffuseColor.rgb *= mix(0.62, 1.0, mottle);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.12, 0.1), speck * 0.7);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.86, 0.78), pale * 0.35);
+  ${projection}
+  vec3 detail = tri(uGraniteDiff, pp, w) / uGraniteMean;
+  diffuseColor.rgb *= clamp(mix(vec3(dot(detail, vec3(0.2126, 0.7152, 0.0722))), detail, 0.3), 0.0, 2.5);
+  // Greyer and paler than the stones' warm vertex tone: the reference's are cream-grey granite in a gold light.
+  diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.55) * 1.05;
 }`,
-        normal: BUMP('lNoise(vLandingPos * 90.0) * 0.6 + lNoise(vLandingPos * 260.0) * 0.4', 0.004),
+        roughness: `{\n${projection}\n  roughnessFactor = clamp(tri(uGraniteRough, pp, w).r * 0.6, 0.15, 0.7);\n}`,
+        normal: `{\n${projection}\n  normal = normalize((viewMatrix * vec4(triNormal(uGraniteNor, pp, w, nW, 1.4), 0.0)).xyz);\n}`,
         light: GLINTS(140.0, 0.93, 14.0) + BACKLIT(1.1),
       });
+    }
     default:
       return null;
   }
