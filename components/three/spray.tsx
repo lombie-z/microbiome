@@ -114,7 +114,7 @@ function fallSurface(scene: Object3D) {
   scene.updateMatrixWorld(true);
   scene.traverse((o) => {
     const mesh = o as Mesh;
-    if (!mesh.isMesh || !mesh.name.startsWith('Fall')) return;
+    if (!mesh.isMesh || !mesh.name.startsWith('Fall') || mesh.name.startsWith('FallMain')) return;
     const g = mesh.geometry;
     const pos = g.getAttribute('position');
     const nor = g.getAttribute('normal');
@@ -124,6 +124,8 @@ function fallSurface(scene: Object3D) {
       // Only where the water is falling and fully there (not the still channel, nor where the streams fade out).
       if ((flow && flow.getX(i) < 0.5) || (fade && fade.getX(i) < 0.95)) continue;
       const p = new Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      // (Only above the rock ledge they land on.)
+      if (p.y < -0.7) continue;
       const n = new Vector3().fromBufferAttribute(nor, i).transformDirection(mesh.matrixWorld);
       points.push({ p, n });
     }
@@ -134,7 +136,8 @@ function fallSurface(scene: Object3D) {
 const POOL_Y = -11;
 // The big fall's foot (art/build-spill.py): a curtain about 3 deep (x) and 7.7 wide (z) where it meets the pool.
 const FALL_FOOT = 3.2;
-const BRAID_Y = -3.6; // where the streams join (art/build-spill.py JOIN_Z)
+// The rock ledge's lip, where the planter's streams land and the real fall pours over (art/build-landing.py).
+const LIP = new Vector3(-1.05, -0.8, 0);
 
 /** Gives a system an opacity that follows the landing (0 to 1), set in Spray's frame loop. */
 function withLanding(system: ReturnType<typeof particles>, opacity: (landing: number) => number) {
@@ -224,7 +227,7 @@ export function Spray({ scene }: { scene: Object3D }) {
         }),
         (landing) => 0.3 * landing
       ),
-      // A softer haze where the streams join into one.
+      // A softer haze where the water goes over the ledge.
       particles({
         count: 40,
         gravity: 0,
@@ -232,10 +235,9 @@ export function Spray({ scene }: { scene: Object3D }) {
         opacity: 0.1,
         softness: 1,
         emit: (_, start, velocity) => {
-          const a = Math.random() * Math.PI * 2;
-          const r = 0.3 + Math.random() * 0.45;
-          start.set(Math.cos(a) * r, BRAID_Y + (Math.random() - 0.5) * 1.6, Math.sin(a) * r);
-          velocity.set(Math.cos(a) * 0.05, -0.15, Math.sin(a) * 0.05);
+          // Spray off the lip where the water goes over, along its width.
+          start.set(LIP.x - Math.random() * 0.3, LIP.y - Math.random() * 0.6, (Math.random() * 2 - 1) * 2.0);
+          velocity.set(-0.08 - Math.random() * 0.08, -0.12, (Math.random() - 0.5) * 0.06);
           return { life: 5 + Math.random() * 3, size: 0.6 + Math.random() * 0.6 };
         },
       }),

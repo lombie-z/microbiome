@@ -179,10 +179,51 @@ for p in me.polygons:
 me.materials.append(material('Canyon'))
 canyon = link('Landing.Canyon', me)
 
+# --- The fall's ledge -------------------------------------------------------------------------------------------------
+# A rock shelf jutting from the cliff just under the floating planter: the planter's streams land on it, and the real
+# waterfall pours over its front lip (x LEDGE_LIP) down to the lake. Its lip sits just inside the top of the landing
+# frame.
+LEDGE_TOP, LEDGE_LIP = -0.7, -1.0
+# A squashed, lumpy dome half sunk into the cliff: its front curves round into the rock at both ends (a horseshoe lip,
+# as water wears one), its top a rough shelf, its underside bulging back into the wall.
+LEDGE_CENTRE = Vector((2.0, 0.0))
+LEDGE_REACH = (3.0, 2.7)  # half-extent out from the cliff (x) and along it (y)
+bm = bmesh.new()
+bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=1.0)
+for v in bm.verts:
+    n = v.co.copy()
+    x = LEDGE_CENTRE.x + n.x * LEDGE_REACH[0]
+    y = n.y * LEDGE_REACH[1]
+    # Top flattened into the shelf; below, a deep rounded bulge that tucks back into the cliff.
+    z = LEDGE_TOP - 0.08 + max(n.z, 0.0) * 0.12 if n.z > 0 else LEDGE_TOP - 0.1 + n.z * (1.0 + 0.9 * max(0.0, n.x))
+    p_ = Vector((x, y, z))
+    # Lumpy rock all over, cracked into blocks on the face.
+    p_ += n * (fbm(p_ * 0.9, 4) * 0.28 + noise.noise(p_ * 2.6) * 0.06)
+    v.co = p_
+bm.normal_update()
+col = bm.loops.layers.color.new('Col')
+for f in bm.faces:
+    for loop in f.loops:
+        v = loop.vert
+        n = noise.noise(v.co * 0.6)
+        c = mix(ROCK, ROCK_LIGHT, 0.45 + 0.3 * n)
+        c = mix(c, ROCK_DARK, smoothstep(0.2, -0.8, v.normal.z) * 0.6)  # the underside in shadow
+        c = mix(c, GRASS_DARK, smoothstep(0.75, 0.95, v.normal.z) * smoothstep(0.0, 0.4, noise.noise(v.co * 1.4 + Vector((5, 5, 5)))) * 0.8)
+        loop[col] = (c.r, c.g, c.b, 1.0)
+me = bpy.data.meshes.new('Landing.Ledge')
+bm.to_mesh(me)
+bm.free()
+for p_ in me.polygons:
+    p_.use_smooth = True
+me.materials.append(material('Canyon'))
+link('Landing.Ledge', me)
+
 # --- Greenery on the ledges and tops ----------------------------------------------------------------------------------
 
 dg = bpy.context.evaluated_depsgraph_get()
-spots = [(v.co.copy(), v.normal.copy()) for v in me.vertices if v.normal.z > 0.6 and v.co.z > LAKE_Z + 0.6]
+# (None round the fall's ledge and the planter above it, which the camera passes right by.)
+spots = [(v.co.copy(), v.normal.copy()) for v in me.vertices if v.normal.z > 0.6 and v.co.z > LAKE_Z + 0.6
+         and not (v.co.xy.length < 7 and v.co.z > -4)]
 rnd.shuffle(spots)
 
 

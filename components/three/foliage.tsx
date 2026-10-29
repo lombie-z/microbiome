@@ -19,7 +19,7 @@ import {
   UniformsUtils,
   Vector3,
 } from 'three';
-import { belowVisible, isLightDevice, journey } from '@/lib/journey';
+import { belowVisible, isLightDevice, journey, ledgeIn } from '@/lib/journey';
 import { foliageMaterial } from './landing';
 
 // Trees and bushes clinging to the canyon (art/build-landing.py), as thick on its ledges, faces and skyline as the
@@ -64,30 +64,38 @@ attribute float aSize;
 attribute float aCell;
 attribute float aFlip;
 attribute float aShade;
+attribute float aNear;
+uniform float uGrow;
 varying vec2 vUv;
 varying float vShade;
 varying float vPink;
+varying float vNear;
 #include <fog_pars_vertex>
 void main() {
   // Upright cards turned to the camera round the vertical, standing on their base.
   vec3 toCamera = cameraPosition - aBase;
   toCamera.y = 0.0;
   vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), normalize(toCamera)));
-  vec3 p = aBase + right * position.x * aSize + vec3(0.0, 1.0, 0.0) * (position.y + 0.5) * aSize;
+  // (The ledge's trees grow in with it, from small bushes, fading in.)
+  float size = aSize * mix(1.0, 0.45 + 0.55 * uGrow, aNear);
+  vec3 p = aBase + right * position.x * size + vec3(0.0, 1.0, 0.0) * (position.y + 0.5) * size;
   vec4 mvPosition = viewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mvPosition;
   vec2 cellUv = vec2(mix(uv.x, 1.0 - uv.x, aFlip), uv.y);
   vUv = (vec2(mod(aCell, 3.0), 2.0 - floor(aCell / 3.0)) + cellUv) / 3.0;
   vShade = aShade;
   vPink = aCell >= 3.0 && aCell < 6.0 ? 1.0 : 0.0;
+  vNear = aNear;
   #include <fog_vertex>
 }`;
 
 const treeFragment = /* glsl */ `
 uniform sampler2D uAtlas;
+uniform float uGrow;
 varying vec2 vUv;
 varying float vShade;
 varying float vPink;
+varying float vNear;
 #include <fog_pars_fragment>
 void main() {
   vec4 tex = texture2D(uAtlas, vUv);
@@ -99,12 +107,13 @@ void main() {
   // Greener foliage (the scans' leaves render olive-brown here), lit from within at the bright edges.
   c = mix(c, vec3(0.5, 0.72, 0.28) * (0.25 + 1.4 * l), (1.0 - vPink) * 0.55);
   c = mix(c, vec3(1.0, 0.5, 0.52) * (0.35 + 1.5 * l), vPink * 0.92);
-  gl_FragColor = vec4(c * vShade, 1.0);
+  // (The ledge's trees fade in.)
+  gl_FragColor = vec4(c * vShade, vNear > 0.5 ? smoothstep(0.0, 0.7, uGrow) : 1.0);
   #include <fog_fragment>
   #include <colorspace_fragment>
 }`;
 
-type Spot = { p: Vector3; n: Vector3; size: number; blossom: boolean };
+type Spot = { p: Vector3; n: Vector3; size: number; blossom: boolean; near?: boolean };
 
 function pickSpots(canyon: Mesh, max: number) {
   canyon.updateWorldMatrix(true, false);
@@ -119,6 +128,8 @@ function pickSpots(canyon: Mesh, max: number) {
     n.fromBufferAttribute(normal, i).applyMatrix3(normalMatrix).normalize();
     const above = p.y - LAKE_Y;
     if (above < 0.5) continue;
+    // Clear of the ledge and the planter above it, which the camera passes right by.
+    if (Math.hypot(p.x, p.z) < 7 && p.y > -4) continue;
     const patch = patchNoise(p.clone().multiplyScalar(0.35));
     const r = hash(p.x, p.y, p.z);
     // Tops and ledges: well wooded. Faces: in patches, and hanging along the fractures.
@@ -135,6 +146,22 @@ function pickSpots(canyon: Mesh, max: number) {
   return spots.filter((_, i) => i % Math.max(1, Math.ceil(spots.length / max)) === 0);
 }
 
+/** A thicket on the fall's ledge (art/build-landing.py), round where the planter's streams land: they pour into it. */
+function ledgeSpots(ledge: Mesh) {
+  ledge.updateWorldMatrix(true, false);
+  const position = ledge.geometry.getAttribute('position');
+  const normal = ledge.geometry.getAttribute('normal');
+  const normalMatrix = new Matrix3().getNormalMatrix(ledge.matrixWorld);
+  const spots: Spot[] = [];
+  for (let i = 0; i < position.count; i++) {
+    const p = new Vector3().fromBufferAttribute(position, i).applyMatrix4(ledge.matrixWorld);
+    const n = new Vector3().fromBufferAttribute(normal, i).applyMatrix3(normalMatrix).normalize();
+    if (n.y < 0.5 || hash(p.x, p.y, p.z) > 0.35) continue;
+    spots.push({ p, n, size: 0, blossom: hash(p.z, p.x, 7.7) < 0.2, near: true });
+  }
+  return spots;
+}
+
 /** One tree per spot: on ledges and tops full trees, on the faces small ones clinging on. */
 function trees(spots: Spot[]) {
   const geometry = new InstancedBufferGeometry();
@@ -147,9 +174,10 @@ function trees(spots: Spot[]) {
   const cell = new Float32Array(spots.length);
   const flip = new Float32Array(spots.length);
   const shade = new Float32Array(spots.length);
+  const near = new Float32Array(spots.length);
   spots.forEach((s, i) => {
     const ledge = s.n.y > 0.55;
-    const h = ledge ? 0.7 + 1.2 * hash(i, 3, 1) : 0.35 + 0.45 * hash(i, 3, 1);
+    const h = s.near ? 0.5 + 0.7 * hash(i, 3, 1) : ledge ? 0.7 + 1.2 * hash(i, 3, 1) : 0.35 + 0.45 * hash(i, 3, 1);
     // Sunk a little into the slope, so no tree stands on air.
     base.set([s.p.x, s.p.y - h * 0.08, s.p.z], i * 3);
     size[i] = h;
@@ -157,12 +185,14 @@ function trees(spots: Spot[]) {
     cell[i] = cells[Math.floor(hash(i, 7, 5) * cells.length)];
     flip[i] = hash(i, 9, 2) < 0.5 ? 0 : 1;
     shade[i] = 1.0 + 0.35 * hash(i, 4, 8);
+    near[i] = s.near ? 1 : 0;
   });
   geometry.setAttribute('aBase', new InstancedBufferAttribute(base, 3));
   geometry.setAttribute('aSize', new InstancedBufferAttribute(size, 1));
   geometry.setAttribute('aCell', new InstancedBufferAttribute(cell, 1));
   geometry.setAttribute('aFlip', new InstancedBufferAttribute(flip, 1));
   geometry.setAttribute('aShade', new InstancedBufferAttribute(shade, 1));
+  geometry.setAttribute('aNear', new InstancedBufferAttribute(near, 1));
   geometry.instanceCount = spots.length;
   const atlas = new TextureLoader().load(ATLAS);
   atlas.colorSpace = SRGBColorSpace;
@@ -170,16 +200,18 @@ function trees(spots: Spot[]) {
   const material = new ShaderMaterial({
     vertexShader: treeVertex,
     fragmentShader: treeFragment,
-    uniforms: UniformsUtils.merge([UniformsLib.fog, { uAtlas: { value: null } }]),
+    uniforms: UniformsUtils.merge([UniformsLib.fog, { uAtlas: { value: null }, uGrow: { value: 0 } }]),
     fog: true,
+    // (Blended, so the ledge's trees can fade in; cut-out leaves keep it from needing sorting otherwise.)
+    transparent: true,
   });
   material.uniforms.uAtlas.value = atlas;
   return { geometry, material };
 }
 
-export function Foliage({ canyon }: { canyon: Mesh }) {
+export function Foliage({ canyon, ledge }: { canyon: Mesh; ledge?: Mesh }) {
   const spots = useMemo(() => pickSpots(canyon, isLightDevice() ? 700 : 1800), [canyon]);
-  const tree = useMemo(() => trees(spots), [spots]);
+  const tree = useMemo(() => trees([...spots, ...(ledge ? ledgeSpots(ledge) : [])]), [spots, ledge]);
   const mesh = useMemo(() => {
     const keep = spots;
     // Undergrowth round each tree: a couple of low clumps hugging the rock.
@@ -221,6 +253,7 @@ export function Foliage({ canyon }: { canyon: Mesh }) {
     const show = belowVisible(journey.frame);
     mesh.visible = show;
     tree.material.visible = show;
+    tree.material.uniforms.uGrow.value = ledgeIn(journey.frame);
   });
 
   return (

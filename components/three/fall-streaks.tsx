@@ -3,17 +3,20 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import { Color, DoubleSide, InstancedBufferAttribute, InstancedBufferGeometry, PlaneGeometry, ShaderMaterial } from 'three';
-import { isLightDevice } from '@/lib/journey';
+import { belowVisible, isLightDevice, journey, ledgeIn } from '@/lib/journey';
 import { waterLanding } from './water';
 
-// The big fall's body: thousands of white streaks pouring down the curtain (art/build-spill.py main_fall) and
-// accelerating as they go, which is what makes falling water read as water. Each is a thin quad, upright and turned to
-// face the camera, stretched with its speed. The fall's mesh is the faint sheet behind them.
-const TOP = -3.4; // where the streams have joined into one curtain (art/build-spill.py JOIN_Z)
-const LANDING_TOP = 0.6; // at the landing the curtain pours from above the frame, as the reference's fall
+// The real waterfall: thousands of white streaks pouring over the lip of the rock ledge under the planter
+// (art/build-landing.py LEDGE_TOP, LEDGE_LIP) down to the lake, accelerating as they go, which is what makes falling
+// water read as water. Each is a thin quad, upright and turned to face the camera, stretched with its speed, over a
+// white sheet for the curtain's body. The planter's own streams land on the ledge above it.
+const LIP_TOP = -0.7; // the ledge's top (three y: Blender's z)
+const LIP_X = -1.0; // its front lip at the middle (three x)
+// The lip curves back into the cliff at both ends (the ledge is a dome half sunk in the rock: centre x 2.0, reaching
+// 3.0 out and 2.7 along).
+const lipX = (z: number) => 2.0 - 3.0 * Math.sqrt(Math.max(0, 1 - (z / 2.7) ** 2));
 const BOTTOM = -11.05; // the pool
-const RX = 1.45; // the curtain's half-depth (three x)
-const RZ = 3.75; // its half-width across the landing's view (three z)
+const RZ = 3.75; // the curtain's half-width across the landing's view (three z)
 
 // At the landing the curtain splits as the reference's does: a broad main fall, a gap with a few threads, and a thin
 // fall to its right. t runs across the curtain from its left edge (as the landing sees it) to its right.
@@ -38,7 +41,7 @@ varying float vAlpha;
 varying float vShade;
 varying vec2 vQuad;
 void main() {
-  float top = mix(${TOP.toFixed(2)}, ${LANDING_TOP.toFixed(2)}, uLanding);
+  float top = ${LIP_TOP.toFixed(2)};
   float drop = top - ${BOTTOM.toFixed(2)};
   // Time to fall the whole height from this streak's starting speed under gravity; loop over it.
   float g = 9.8;
@@ -46,12 +49,9 @@ void main() {
   float t = fract(uTime / life + aPhase) * life;
   float fallen = aSpeed * t + 0.5 * g * t * t;
   float v = aSpeed + g * t;
-  // A flat curtain from where the streams join (as wide as their comb there, art/build-spill.py CURTAIN_TOP_HALF),
-  // widening a little toward the pool.
-  vec3 centre = vec3(aStart.x, top - fallen, aStart.z);
-  // At the landing it's one broad curtain from the top of the frame.
-  float fan = mix(mix(0.45, 0.78, fallen / drop), mix(0.62, 0.78, fallen / drop), uLanding);
-  centre.xz *= fan;
+  // Over the lip and out a little as it falls (away from the cliff), widening a little toward the pool.
+  vec3 centre = vec3(aStart.x - sqrt(fallen) * 0.18, top - fallen, aStart.z);
+  centre.z *= mix(0.58, 0.78, fallen / drop);
   // Stretch with speed (motion blur), widen a touch as it falls and breaks up.
   // (Shorter at the landing, where the curtain is seen whole and long smears would blur its texture.)
   float len = (0.14 + v * 0.06) * mix(1.0, 0.45, uLanding);
@@ -60,9 +60,8 @@ void main() {
   vec3 p = centre + right * position.x * width + vec3(0.0, 1.0, 0.0) * position.y * len;
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   vQuad = position.xy * 2.0;
-  // Fade in below the join and out into the splash.
-  // (A long fade-in below the join on the way down, so the curtain grows out of the streams with no edge.)
-  vAlpha = smoothstep(0.0, mix(2.6, 0.9, uLanding), fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * mix(1.0, profile(aLane), uLanding);
+  // In over the lip, out into the splash; shaped as the reference's fall (a main column, a gap, a thin fall).
+  vAlpha = smoothstep(0.0, 0.3, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * profile(aLane);
   vShade = aShade;
 }`;
 
@@ -87,6 +86,8 @@ void main() {
   vec3 p = position;
   // As wide as the strands' curtain: narrower at the top, widening as it falls.
   p.x *= mix(0.74, 0.58, uv.y);
+  // Curving round with the ledge's lip (the plane's local z is the world's -x).
+  p.z -= 2.0 - 3.0 * sqrt(max(0.0, 1.0 - pow(p.x / 2.7, 2.0))) - ${LIP_X.toFixed(2)};
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 
@@ -94,6 +95,7 @@ const sheetFragment = /* glsl */ `
 ${PROFILE}
 uniform float uTime;
 uniform float uLanding;
+uniform float uIn;
 varying vec2 vUv;
 float fHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float fNoise(vec2 p) {
@@ -117,7 +119,7 @@ void main() {
   // Crisp strands: a narrow step between rope and gap, so the curtain reads as distinct falling ropes, not a smear.
   float body = max(smoothstep(0.42, 0.56, ropes), clumps);
   // See-through in the gaps between ropes (the rock shows dark behind), solid in the ropes and foam.
-  float a = uLanding * edge * mix(0.45, 1.0, body) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(q.x));
+  float a = uIn * mix(0.7, 1.0, uLanding) * edge * mix(0.45, 1.0, body) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(q.x));
   vec3 c = vec3(1.35, 1.24, 1.08) * mix(0.45, 1.15, body) * mix(1.0, 0.86, vUv.x);
   c += vec3(0.35, 0.3, 0.25) * clumps;
   // The low sun from the left: the main column's sunward edge glows gold, and light comes through where it's thin.
@@ -165,9 +167,11 @@ export function FallStreaks() {
       // Across the width (frayed at the edges), through the depth.
       const across = Math.max(-1.15, Math.min(1.15, (lane.at * 2 - 1) * 1.08 + (Math.random() - 0.5) * 0.02));
       const a = Math.asin(Math.max(-1, Math.min(1, across)));
-      start[i * 3] = (Math.random() * 2 - 1) * RX * 0.8;
-      start[i * 3 + 1] = TOP;
+      // Just off the lip, a little depth to the sheet of water going over it.
+      start[i * 3 + 1] = LIP_TOP;
       start[i * 3 + 2] = across * RZ;
+      // (z is the curtain's width at the lip: 0.58 of its full width there.)
+      start[i * 3] = lipX(across * RZ * 0.58) - 0.05 - Math.random() * 0.25;
       laneAt[i] = lane.at;
       speed[i] = 2.5 + Math.random() * 2.5;
       phase[i] = Math.random();
@@ -207,7 +211,7 @@ export function FallStreaks() {
       new ShaderMaterial({
         vertexShader: sheetVertex,
         fragmentShader: sheetFragment,
-        uniforms: { uTime: { value: 0 }, uLanding: waterLanding },
+        uniforms: { uTime: { value: 0 }, uLanding: waterLanding, uIn: { value: 0 } },
         transparent: true,
         depthWrite: false,
         side: DoubleSide,
@@ -218,22 +222,29 @@ export function FallStreaks() {
   useFrame((state) => {
     material.uniforms.uTime.value = state.clock.elapsedTime;
     sheet.uniforms.uTime.value = state.clock.elapsedTime;
-    sheet.visible = waterLanding.value > 0.01;
+    // Both only with the world below (lib/journey.ts belowVisible): the ledge is part of it.
+    const real = belowVisible(journey.frame);
+    material.visible = real;
+    sheet.visible = real;
+    // Coming in with the ledge.
+    const fadeIn = ledgeIn(journey.frame);
+    material.uniforms.uOpacity.value = 0.5 * fadeIn;
+    sheet.uniforms.uIn.value = fadeIn;
   });
 
   return (
     <>
       <mesh name="SprayFall" geometry={geometry} material={material} frustumCulled={false} renderOrder={3} />
-      {/* The curtain's body at the landing: a white sheet behind the strands, so the cliff doesn't show through. */}
+      {/* The curtain's body: a white sheet behind the strands, so the cliff doesn't show through. */}
       <mesh
         name="SprayFallSheet"
         material={sheet}
-        position={[0, (LANDING_TOP + BOTTOM) / 2, 0]}
+        position={[LIP_X - 0.3, (LIP_TOP + BOTTOM) / 2, 0]}
         rotation={[0, -Math.PI / 2, 0]}
         frustumCulled={false}
         renderOrder={2}
       >
-        <planeGeometry args={[RZ * 2, LANDING_TOP - BOTTOM, 1, 1]} />
+        <planeGeometry args={[RZ * 2, LIP_TOP - BOTTOM, 1, 1]} />
       </mesh>
     </>
   );

@@ -24,8 +24,12 @@ export type WaterKind = 'falling' | 'still' | 'pool';
 export const waterTime = { value: 0 };
 /** How far into the landing the camera is (lib/journey.ts landingAt): the streams there give way to the strand curtain. */
 export const waterLanding = { value: 0 };
-/** Once the planter's left behind, the streams come out of the sky (lib/journey.ts streamsFromSky). */
+/** How far the planter's streams have faded, with the planter itself (lib/journey.ts toyPresence). */
 export const waterFromSky = { value: 0 };
+/** 1 once the world below is drawn (lib/journey.ts belowVisible): the streams then end on the rock ledge under the planter. */
+export const waterLedge = { value: 0 };
+// The ledge's top (art/build-landing.py LEDGE_TOP; three's y).
+const LEDGE_TOP = -0.7;
 
 export function waterMaterial(kind: WaterKind): Material {
   // The pool lies flat under the low sun: a softer sheen there, or the sun's reflection blooms into a glare.
@@ -47,6 +51,7 @@ export function waterMaterial(kind: WaterKind): Material {
     shader.uniforms.uTime = waterTime;
     shader.uniforms.uLanding = waterLanding;
     shader.uniforms.uFromSky = waterFromSky;
+    shader.uniforms.uLedge = waterLedge;
     shader.uniforms.uDeep = { value: DEEP };
     shader.uniforms.uMid = { value: MID };
     shader.uniforms.uPale = { value: PALE };
@@ -83,6 +88,7 @@ vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`
 uniform float uTime;
 uniform float uLanding;
 uniform float uFromSky;
+uniform float uLedge;
 uniform vec3 uDeep;
 uniform vec3 uMid;
 uniform vec3 uPale;
@@ -132,8 +138,9 @@ ${NOISE}`
   // (Fuller white on the way down, where the streams carry the fall themselves; a faint sheet at the landing, where
   // the strands do.)
   diffuseColor.a *= mix(1.0, mix(mix(0.5, 0.2, uLanding), mix(0.9, 0.45, uLanding), streaks), aerated) * (1.0 - 0.85 * uLanding);
-  // Once the planter's gone (the toy's left behind above), the streams come out of the sky: their tops fade away.
-  diffuseColor.a *= mix(1.0, smoothstep(-0.3, -3.0, vWorld.y), uFromSky);
+  // The streams land on the ledge (nothing of them below its top), and fade with the planter.
+  if (uLedge > 0.5 && vWorld.y < ${LEDGE_TOP.toFixed(2)}) discard;
+  diffuseColor.a *= 1.0 - uFromSky;
   // Sunlit streaks glow past white, so the bloom gives the curtain its luminous edge.
   totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * aerated * streaks * 0.45;
   // Ragged, broken edges where the curtain is seen edge-on: it frays into separate streams rather than ending in a

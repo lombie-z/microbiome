@@ -16,7 +16,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep, toyPresence } from '@/lib/journey';
+import { BEATS, belowVisible, journey, landingAt, ledgeIn, RAINBOW_LAYER, smoothstep, toyPresence } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -27,7 +27,7 @@ import { SilhouetteOutline } from './silhouette-outline';
 import { bloomAt, SUN_POSITION } from './sky';
 import { Spray } from './spray';
 import { useStudioReflections } from './studio-environment';
-import { waterFromSky, waterLanding, waterMaterial, waterTime } from './water';
+import { waterFromSky, waterLanding, waterLedge, waterMaterial, waterTime } from './water';
 
 export const DRACO_PATH = '/draco/';
 const URL = '/models/micro-biome.glb';
@@ -129,7 +129,10 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         // The lake is drawn by <Lake> (a reflector); the spray particles stand in for Blender's splash beads.
         mesh.visible = false;
       } else if (own.name === 'Canyon') mesh.material = rockMaterial(own);
-      else if (name.startsWith('Fall')) {
+      else if (name === 'FallMain') {
+        // The real waterfall is drawn by <FallStreaks> now, pouring from the ledge's lip.
+        mesh.visible = false;
+      } else if (name.startsWith('Fall')) {
         mesh.material = falling;
         mesh.renderOrder = 2;
       } else if (name.startsWith('SkyCloud')) {
@@ -162,6 +165,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   }, [scene]);
 
   const canyon = useMemo(() => scene.getObjectByName('LandingCanyon') as Mesh | undefined, [scene]);
+  const ledge = useMemo(() => scene.getObjectByName('LandingLedge') as Mesh | undefined, [scene]);
   // The toy itself (planter, spires, moss, letters, its water): everything under the biome's root that isn't part of
   // the world below or the sky.
   const toy = useMemo(() => {
@@ -264,6 +268,13 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     const landing = landingAt(journey.frame);
     const showBelow = belowVisible(journey.frame);
     for (const o of below) o.visible = showBelow;
+    waterLedge.value = showBelow ? 1 : 0;
+    // The ledge comes in gradually (it's too close to the camera for the haze to hide it).
+    if (ledge) {
+      const m = ledge.material as Material;
+      m.opacity = ledgeIn(journey.frame);
+      m.transparent = m.opacity < 0.999;
+    }
     waterLanding.value = landing;
     if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
@@ -323,7 +334,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       {!(process.env.NODE_ENV === 'development' && window.location.search.includes('nospray')) && <Spray scene={scene} />}
       <FallStreaks />
       <MistBank />
-      {canyon && <Foliage canyon={canyon} />}
+      {canyon && <Foliage canyon={canyon} ledge={ledge} />}
       <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>
   );
