@@ -1,5 +1,6 @@
 'use client';
 
+import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import {
   Color,
@@ -18,7 +19,7 @@ import {
   UniformsUtils,
   Vector3,
 } from 'three';
-import { isLightDevice } from '@/lib/journey';
+import { belowVisible, isLightDevice, journey } from '@/lib/journey';
 import { foliageMaterial } from './landing';
 
 // Trees and bushes clinging to the canyon (art/build-landing.py), as thick on its ledges, faces and skyline as the
@@ -215,6 +216,12 @@ export function Foliage({ canyon }: { canyon: Mesh }) {
     instanced.frustumCulled = false;
     return instanced;
   }, [spots]);
+
+  useFrame(() => {
+    const show = belowVisible(journey.frame);
+    mesh.visible = show;
+    tree.material.visible = show;
+  });
 
   return (
     <>

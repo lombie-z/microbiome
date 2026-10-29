@@ -43,4 +43,10 @@ export const smoothstep = (edge0: number, edge1: number, x: number) => {
 export const isLightDevice = () => typeof window !== 'undefined' && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
 
 /** 0 until the camera nears the lake, 1 at the landing: the landing's own light, haze and grade blend in on this. */
+/**
+ * Whether the world below (the canyon, lake and their dressing) is drawn: not for the hero, which sits on the blog's
+ * plain plaster, until the fog closes in among the falls.
+ */
+export const belowVisible = (frame: number) => frame > BEATS.fogIn;
+
 export const landingAt = (frame: number) => smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], frame);

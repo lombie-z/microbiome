@@ -16,7 +16,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, journey, landingAt, smoothstep } from '@/lib/journey';
+import { BEATS, belowVisible, journey, landingAt, smoothstep } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -170,6 +170,13 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   }, [scene]);
 
   const canyon = useMemo(() => scene.getObjectByName('LandingCanyon') as Mesh | undefined, [scene]);
+  const below = useMemo(() => {
+    const list: Object3D[] = [];
+    scene.traverse((o) => {
+      if (o.name.startsWith('Landing') && !o.parent?.name.startsWith('Landing')) list.push(o);
+    });
+    return list;
+  }, [scene]);
 
   const animated = useMemo(() => {
     const list: Animated[] = [];
@@ -235,14 +242,17 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     waterTime.value += Math.min(delta, 1 / 20);
     if (rainbow.current) {
       const bow = smoothstep(BEATS.bowIn, BEATS.bowFull, journey.frame);
-      // Stronger at the landing, where it hangs bright in the fall's spray (as the reference's).
-      rainbow.current.uniforms.uOpacity.value = bow * (1 + 0.9 * landingAt(journey.frame));
+      // Stronger for the landing shot, where it hangs bright in the fall's spray (as the reference's); back to normal on
+      // the pull-back, where it and its reflection would ring the fall.
+      rainbow.current.uniforms.uOpacity.value = bow * (1 + 0.9 * smoothstep(720, 765, journey.frame) * (1 - smoothstep(800, 840, journey.frame)));
       rainbow.current.visible = bow > 0.001;
     }
     // The studio key gives way to the warm sun (components/three/sky.tsx) below the clouds.
     // The studio lights give way to the warm sun (components/three/sky.tsx): partly below the clouds, almost wholly at
     // the landing, where the light should be low, warm and contrasty.
     const landing = landingAt(journey.frame);
+    const showBelow = belowVisible(journey.frame);
+    for (const o of below) o.visible = showBelow;
     waterLanding.value = landing;
     if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;

@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import { CircleGeometry, Color, Vector3 } from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
-import { isLightDevice } from '@/lib/journey';
+import { belowVisible, isLightDevice, journey } from '@/lib/journey';
 import { SUN_POSITION } from './sky';
 
 // The lake under the landing (art/build-landing.py LAKE_CENTRE, LAKE_Z; Blender's -y is three's z): a still mirror of
@@ -101,6 +101,7 @@ export function Lake() {
 
   useFrame((state) => {
     const uniforms = (lake.material as unknown as { uniforms: Record<string, { value: unknown }> }).uniforms;
+    lake.visible = belowVisible(journey.frame);
     uniforms.uTime.value = state.clock.elapsedTime;
     (uniforms.uSun.value as Vector3).copy(SUN_POSITION);
   });
