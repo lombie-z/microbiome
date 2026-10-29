@@ -242,26 +242,45 @@ col = bm.loops.layers.color.new('Col')
 FAR = Color((0.78, 0.6, 0.62))
 FAR_FOOT = Color((0.62, 0.48, 0.56))
 FAR_LIT = Color((0.95, 0.72, 0.58))
-for layer, (radius, top) in enumerate(((60, 9), (85, 19), (120, 34))):
-    segs = 220
-    rows = []
+def ridged(p, octaves=6):
+    """Ridged noise: sharp crests and steep valleys, as eroded peaks."""
+    total, amp, freq, weight = 0.0, 0.6, 1.0, 1.0
+    for _ in range(octaves):
+        n = (1 - abs(noise.noise(p * freq))) ** 2
+        total += n * amp * weight
+        weight = min(1.0, n * 1.6)
+        amp *= 0.5
+        freq *= 2.05
+    return total
+
+
+# Four ranges, each a curtain of peaks: jagged ridged crests over rows that lean back as they rise (so the slopes
+# shade), the farther ones taller and fainter in the haze.
+ROWS = 6
+for layer, (radius, top) in enumerate(((50, 13), (64, 22), (82, 32), (105, 44))):
+    segs = 640
+    grid = []
     for k in range(segs + 1):
         a = 2 * math.pi * k / segs
-        # Highest behind the saddle the sun sets over (seen from the landing, round 75 degrees).
         toward_sun = max(0.0, math.cos(a - math.radians(75))) ** 2
-        ridge = top * (0.3 + 0.7 * toward_sun) * (0.55 + 0.45 * (fbm(Vector((math.cos(a) * 4, math.sin(a) * 4, layer * 5.0)), 5) + 0.5))
-        r = radius + layer * 4
-        base = Vector((math.cos(a) * r, math.sin(a) * r, LAKE_Z - 2))
-        rows.append((bm.verts.new(base), bm.verts.new(base + Vector((0, 0, max(ridge, 1.0) + 2)))))
+        crest = top * (0.3 + 0.7 * toward_sun) * (0.35 + 0.9 * ridged(Vector((math.cos(a) * 3.5, math.sin(a) * 3.5, layer * 7.0))))
+        column = []
+        for j in range(ROWS + 1):
+            t = j / ROWS
+            r = radius + layer * 4 + t * top * 0.6
+            h = (max(crest, 1.0) + 2) * t ** 0.85
+            column.append(bm.verts.new((math.cos(a) * r, math.sin(a) * r, LAKE_Z - 2 + h)))
+        grid.append(column)
     for k in range(segs):
-        f = bm.faces.new((rows[k][0], rows[k + 1][0], rows[k + 1][1], rows[k][1]))
-        for loop in f.loops:
-            # Lit gold along the ridge toward the sun, cooler mauve in the folds and at the foot.
-            v = loop.vert.co
-            up = smoothstep(LAKE_Z - 2, LAKE_Z + top + 2, v.z)
-            c = mix(FAR_FOOT, FAR, up)
-            c = mix(c, FAR_LIT, up * max(0.0, math.cos(math.atan2(v.y, v.x) - math.radians(75))) * 0.6)
-            loop[col] = (c.r, c.g, c.b, 1.0)
+        for j in range(ROWS):
+            f = bm.faces.new((grid[k][j], grid[k + 1][j], grid[k + 1][j + 1], grid[k][j + 1]))
+            for loop in f.loops:
+                # Lit gold along the crests toward the sun, cooler mauve in the folds and at the foot.
+                v = loop.vert.co
+                up = smoothstep(LAKE_Z - 2, LAKE_Z + top + 2, v.z)
+                c = mix(FAR_FOOT, FAR, up)
+                c = mix(c, FAR_LIT, up * max(0.0, math.cos(math.atan2(v.y, v.x) - math.radians(75))) * 0.6)
+                loop[col] = (c.r, c.g, c.b, 1.0)
 me = bpy.data.meshes.new('Landing.Mountains')
 bm.to_mesh(me)
 bm.free()
