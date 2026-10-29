@@ -38,11 +38,9 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
   return (
     <EffectComposer multisampling={multisampling} autoClear={false}>
       <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
-      <>
-        {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
-          <GodRays sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
-        )}
-      </>
+      {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
+        <GodRays sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
+      )}
       <Grade ref={grade} />
       <Vignette ref={vignette} offset={0.35} darkness={0} />
       <Noise ref={grain} premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0} />

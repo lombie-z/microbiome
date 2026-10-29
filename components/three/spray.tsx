@@ -132,8 +132,6 @@ function fallSurface(scene: Object3D) {
 const POOL_Y = -11;
 // The big fall's foot (art/build-spill.py): a curtain about 3 deep (x) and 7.7 wide (z) where it meets the pool.
 const FALL_FOOT = 3.2;
-const FOOT_X = 0.45;
-const FOOT_Z = 1.15;
 const BRAID_Y = -6.5;
 
 /** Marks a system that only shows at the landing (it fades in with it, in Spray's frame loop). */

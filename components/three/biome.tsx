@@ -7,7 +7,6 @@ import {
   Color,
   type DirectionalLight,
   DoubleSide,
-  type Euler,
   type HemisphereLight,
   type Material,
   type Mesh,

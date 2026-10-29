@@ -118,7 +118,14 @@ export function FallStreaks() {
     const total = lanes.reduce((sum, l) => sum + l.weight, 0);
     for (let i = 0; i < count; i++) {
       let pick = Math.random() * total;
-      const lane = lanes.find((l) => (pick -= l.weight) <= 0) ?? lanes[LANES - 1];
+      let lane = lanes[LANES - 1];
+      for (const l of lanes) {
+        pick -= l.weight;
+        if (pick <= 0) {
+          lane = l;
+          break;
+        }
+      }
       // Across the width (frayed at the edges), through the depth.
       const across = Math.max(-1.15, Math.min(1.15, (lane.at * 2 - 1) * 1.08 + (Math.random() - 0.5) * 0.02));
       const a = Math.asin(Math.max(-1, Math.min(1, across)));
