@@ -23,7 +23,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const PLASTER = new Color('#f5f2ed');
 const SKY_TOP = new Color('#c9a9c2');
 const SKY_HORIZON = new Color('#ffd49c');
-const SUN_GLOW = new Color('#ffcf88');
+const SUN_GLOW = new Color('#ffad5c');
 const CLOUD_LIT = new Color('#ffc4a4');
 const CLOUD_SHADE = new Color('#c48fa3');
 const WARM_LIGHT = new Color('#ffcba3');

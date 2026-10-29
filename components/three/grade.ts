@@ -12,6 +12,8 @@ uniform float contrast;
 uniform float saturation;
 uniform vec3 shadowTint;
 uniform vec3 highlightTint;
+uniform vec3 midTint;
+uniform float glow;
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec3 c = max(inputColor.rgb, vec3(0.0));
@@ -26,7 +28,20 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float l = dot(g, vec3(0.2126, 0.7152, 0.0722));
   // Saturating past 1 can push a channel below zero, and the output's sRGB encode turns that into NaN (white).
   g = max(mix(vec3(l), g, saturation), vec3(0.0));
-  g *= mix(shadowTint, highlightTint, smoothstep(0.02, 0.5, l));
+  // Split toning: rose in the shadows, rose-mauve through the midtones (the reference is pinker than it is yellow),
+  // peach-gold in the highlights.
+  vec3 tint = mix(shadowTint, midTint, smoothstep(0.02, 0.2, l));
+  tint = mix(tint, highlightTint, smoothstep(0.2, 0.6, l));
+  g *= tint;
+  // Glow: the bright parts lift toward white, as a sunlit scene blows out on a camera (the reference has nearly four
+  // times as many near-white pixels: sun, glints, lit rims, the fall).
+  // It glows gold, not white: the light is saturated, as in the reference.
+  g += vec3(1.0, 0.5, 0.36) * l * smoothstep(0.45, 0.9, l) * glow;
+  // Vibrance: the duller colours gain the most, so greys go rosy and pale gold goes gold without the rich ones
+  // clipping.
+  float lv = dot(g, vec3(0.2126, 0.7152, 0.0722));
+  float chroma = (max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b))) / max(lv, 1e-3);
+  g = max(mix(vec3(lv), g, 1.0 + 0.6 * (1.0 - smoothstep(0.1, 0.8, chroma))), vec3(0.0));
   outputColor = vec4(mix(c, g, weight), inputColor.a);
 }`;
 
@@ -36,17 +51,23 @@ export class GradeEffect extends Effect {
       blendFunction: BlendFunction.NORMAL,
       uniforms: new Map<string, Uniform>([
         ['weight', new Uniform(0)],
-        ['exposure', new Uniform(0.78)],
-        ['contrast', new Uniform(1.85)],
-        ['saturation', new Uniform(1.4)],
-        ['shadowTint', new Uniform(new Vector3(1.1, 0.86, 0.86))],
-        ['highlightTint', new Uniform(new Vector3(1.08, 0.96, 0.8))],
+        ['exposure', new Uniform(0.66)],
+        ['contrast', new Uniform(1.9)],
+        ['saturation', new Uniform(1.35)],
+        ['shadowTint', new Uniform(new Vector3(1.12, 0.84, 0.9))],
+        ['midTint', new Uniform(new Vector3(1.09, 0.9, 0.97))],
+        ['highlightTint', new Uniform(new Vector3(1.12, 0.88, 0.8))],
+        ['glow', new Uniform(0.55)],
       ]),
     });
   }
 
   set weight(value: number) {
     (this.uniforms.get('weight') as Uniform<number>).value = value;
+  }
+
+  set glow(value: number) {
+    (this.uniforms.get('glow') as Uniform<number>).value = value;
   }
 }
 

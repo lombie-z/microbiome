@@ -2,7 +2,7 @@
 
 import { useFrame } from '@react-three/fiber';
 import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
-import { BlendFunction, type DepthOfFieldEffect, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
+import { BlendFunction, type BloomEffect, type DepthOfFieldEffect, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
 import { type Mesh, ShaderChunk } from 'three';
 import { journey, landingAt, smoothstep } from '@/lib/journey';
@@ -30,17 +30,29 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
   const nearBlur = useRef<NearBlurEffect>(null);
   const rays = useRef<GodRaysEffect>(null);
   const focus = useRef<DepthOfFieldEffect>(null);
+  const bloomFx = useRef<BloomEffect>(null);
 
   useFrame(() => {
     const underway = smoothstep(10, 120, journey.frame);
     const bloom = bloomAt(journey.frame);
     if (vignette.current) vignette.current.darkness = 0.18 * underway + 0.12 * bloom;
     if (grain.current) grain.current.blendMode.opacity.value = 0.05 * underway;
-    if (grade.current) grade.current.weight = landingAt(journey.frame);
+    // The extra glow is for the still landing shot only: on the approach, right up against the white fall, it would
+    // blow out to white.
+    const arrived = smoothstep(720, 765, journey.frame);
+    if (grade.current) {
+      grade.current.weight = landingAt(journey.frame);
+      grade.current.glow = 0.55 * arrived;
+    }
     // Gentler rays at the landing: full strength they wash the sky's clouds out round the sun.
     // The landing's lens: focused on the frog, the far valley, mountains and cliffs going soft (the reference's depth
     // of field). Off everywhere else, and clearing as the camera rises away.
     if (focus.current) focus.current.bokehScale = 1.6 * landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
+    // A livelier bloom at the landing: more of the bright scene glows (glints, lit rims, the fall, the mist).
+    if (bloomFx.current) {
+      bloomFx.current.luminanceMaterial.threshold = 1.1 - 0.2 * arrived;
+      bloomFx.current.intensity = 0.55 + 0.25 * arrived;
+    }
     if (rays.current) rays.current.godRaysMaterial.weight = 0.6 * (1 - 0.55 * landingAt(journey.frame));
     // The shallow focus is the landing's still shot; it clears as the camera rises away (from frame 800).
     if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
@@ -50,7 +62,7 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     <EffectComposer multisampling={multisampling} autoClear={false}>
       <DepthOfField ref={focus} focusDistance={3.1} focusRange={6} bokehScale={0} />
       <NearBlur ref={nearBlur} />
-      <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
+      <Bloom ref={bloomFx} mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
       {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
         <GodRays ref={rays} sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
       )}
