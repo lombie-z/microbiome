@@ -109,11 +109,22 @@ transformed.x += sway * sin(uTime * 1.3 + transformed.x * 2.0 + transformed.z * 
 transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         // Blades olive rather than spring green (the grade's vibrance lifts them).
         colour:
-          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7);',
+          // (Heads: speckled tan and dark brown, as packed seed fibres.)
+          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
         // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades stay smooth.
-        normal: BUMP('lNoise(vLandingPos * vec3(400.0, 120.0, 400.0)) * step(0.0, diffuseColor.r - diffuseColor.g)', 0.0012),
+        normal: BUMP('lNoise(vLandingPos * vec3(700.0, 200.0, 700.0)) * step(0.0, diffuseColor.r - diffuseColor.g)', 0.0016),
         // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
-        light: `${BACKLIT(1.4)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.2, 0.08) * step(diffuseColor.r, diffuseColor.g);`,
+        light: `${BACKLIT(1.4)}
+totalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.2, 0.08) * step(diffuseColor.r, diffuseColor.g);
+// Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
+if (diffuseColor.r > diffuseColor.g) {
+  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+  float sunward = 0.35 + 0.65 * smoothstep(-0.3, 0.6, dot(nW, ${SUN_DIR}));
+  float fibre = lNoise(vLandingPos * vec3(900.0, 260.0, 900.0));
+  float tips = smoothstep(0.72, 0.9, fibre);
+  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * (pow(rim, 1.6) * 1.4 + tips * (0.4 + rim) * 1.6) * sunward;
+}`,
       });
     case 'Pad':
       // Waxy and wet: deep olive, a golden sheen where the low sun reflects off it, glowing through its thin edges.
