@@ -51,7 +51,6 @@ function patchNoise(p: Vector3) {
 
 const LAKE_Y = -11;
 const GREENS = ['#5b7a2e', '#6e8a35', '#4a6a2a', '#7f9440', '#3d5a26', '#8a9a48'].map((c) => new Color(c));
-const BLOSSOM = ['#e7a3b4', '#d98aa2', '#f2c0c8'].map((c) => new Color(c));
 
 // Scanned trees (Poly Haven's island_tree_01, a pink-blossom variant of it, and island_tree_02), rendered in Blender
 // lit as the landing is (art/bake-foliage-sprites.py, packed by art/pack-foliage-atlas.py): 3x3 cells, three views each.
@@ -184,7 +183,7 @@ export function Foliage({ canyon }: { canyon: Mesh }) {
   const mesh = useMemo(() => {
     const keep = spots;
     // Undergrowth round each tree: a couple of low clumps hugging the rock.
-    const PER = 2;
+    const PER = 1;
     const instanced = new InstancedMesh(new IcosahedronGeometry(1, 2), foliageMaterial(), keep.length * PER);
     instanced.name = 'LandingFoliage';
     const dummy = new Object3D();
@@ -196,10 +195,11 @@ export function Foliage({ canyon }: { canyon: Mesh }) {
       if (tangent.lengthSq() < 0.01) tangent.set(1, 0, 0);
       tangent.normalize();
       bitangent.crossVectors(s.n, tangent);
-      const palette = s.blossom ? BLOSSOM : GREENS;
+      // Undergrowth is always green (the blossom is in the trees), darker than the canopy.
+      const palette = GREENS;
       for (let k = 0; k < PER; k++) {
         const j = i * PER + k;
-        const size = s.size * (0.25 + 0.45 * hash(j, 1, 9));
+        const size = s.size * (0.18 + 0.3 * hash(j, 1, 9));
         dummy.position
           .copy(s.p)
           .addScaledVector(tangent, (hash(j, 4, 1) - 0.5) * s.size * 2.2)
@@ -209,7 +209,7 @@ export function Foliage({ canyon }: { canyon: Mesh }) {
         dummy.rotation.set(0, hash(j, 2, 3) * 6.28, 0);
         dummy.updateMatrix();
         instanced.setMatrixAt(j, dummy.matrix);
-        colour.copy(palette[Math.floor(hash(j, 5, 7) * palette.length)]);
+        colour.copy(palette[Math.floor(hash(j, 5, 7) * palette.length)]).multiplyScalar(0.6);
         instanced.setColorAt(j, colour);
       }
     });
