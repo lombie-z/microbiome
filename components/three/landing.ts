@@ -133,17 +133,13 @@ if (diffuseColor.g > diffuseColor.r) {
   float bits = smoothstep(0.6, 0.85, lNoise(vLandingPos * vec3(60.0, 220.0, 60.0)));
   totalEmissiveRadiance += vec3(1.0, 0.82, 0.48) * leftMargin * bits * 0.9;
 }
-// Waxy blades reflect: the bright sky slides along them at grazing angles in long streaks, and the sun catches them
-// where they turn toward it.
+// Waxy blades reflect: a long glossy strip down each blade, off the midrib toward its sunward margin, where the bright
+// sky and the low sun slide along the leaf; it comes and goes along the blade's length as the leaf twists.
 if (diffuseColor.g > diffuseColor.r) {
-  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
-  vec3 viewW = normalize(cameraPosition - vLandingPos);
-  // (The reflection of the bright hazy horizon counts too: at eye level the blades mostly mirror it.)
-  float sky = smoothstep(-0.35, 0.25, reflect(-viewW, nW).y);
-  float fresnel = 0.15 + 0.85 * pow(1.0 - abs(dot(nW, viewW)), 1.6);
-  float streaks = smoothstep(0.35, 0.75, lNoise(vLandingPos * vec3(40.0, 3.0, 40.0)));
-  float sun = pow(max(dot(reflect(-${SUN_DIR}, nW), viewW), 0.0), 8.0);
-  totalEmissiveRadiance += vec3(1.0, 0.84, 0.66) * (sky * fresnel * 0.55 + sun * 0.9) * (0.2 + 0.8 * streaks);
+  float side = -vEdge * sign(dFdx(vEdge) + 1e-6);
+  float strip = 1.0 - smoothstep(0.05, 0.35, abs(side - 0.35));
+  float along = smoothstep(0.3, 0.7, lNoise(vLandingPos * vec3(6.0, 2.5, 6.0)));
+  totalEmissiveRadiance += vec3(1.0, 0.86, 0.62) * strip * along * 0.7;
 }
 // Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
 if (diffuseColor.r > diffuseColor.g) {
