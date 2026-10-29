@@ -15,12 +15,15 @@ planter = bpy.data.objects['Planter']
 WATER_Z = 0.522  # surface of the water in the planter
 WATER_HALF = 0.43  # the surface runs just into the inner walls (at 0.422) so no wall shows below the waterline
 POOL_Z = -11.0  # surface of the pool the falls land in
-# Below the cloud layer the falls slowly bend together and braid (MERGE_TOP to MERGE_Z). Over the last stretch they
-# fade out as one big fall fades in around them (MAIN_TOP down to the pool), so there's no hard join.
-MERGE_TOP, MERGE_Z, MAIN_TOP = -2.1, -7.0, -5.6
-SPREAD = 2.0  # how much wider the big fall gets by the time it reaches the pool
-STREAMS_FADE = (-6.0, -7.0)  # streams go from opaque to gone between these heights
-MAIN_FADE = (-5.6, -6.8)  # the big fall goes from gone to opaque
+# The falls join into one without a twist: below the lip each stream eases sideways into its own slot along a single
+# line across the view (a comb, not a funnel), flattening out wide as it goes, until neighbours overlap into one
+# curtain by JOIN_Z. The big fall begins there as a flat curtain of the same width, and the two crossfade while
+# they're aligned, so there's no join to see.
+JOIN_TOP, JOIN_Z = -0.7, -3.6
+MAIN_TOP = -3.2
+CURTAIN_TOP_HALF, CURTAIN_BOTTOM_HALF = 1.7, 2.9  # the curtain's half-width across the view (y) at its top and foot
+STREAMS_FADE = (-3.4, -4.6)  # streams go from opaque to gone between these heights
+MAIN_FADE = (-3.2, -4.3)  # the big fall goes from gone to opaque
 # (name, outward face normal, position along the face, half-width, gap floor z). A and B face the hero camera; C is
 # on the back and turns up while the camera circles.
 GAPS = [
@@ -379,23 +382,21 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
         x += 0.006
         path.append(c + n * (0.5 + x) + Vector((0, 0, lip.z - k * x * x)))
     z = path[-1].z
-    # Each stream ends tucked inside the big fall's crown, entering it on its own side.
-    # They start turning in at slightly different heights and spiral round each other as they gather (a braid,
-    # not a funnel).
+    # Then each stream eases into its slot on the curtain line (x = 0): spread out along y in the same order the gaps sit
+    # round the planter, so no two cross. They start turning at slightly different heights.
     rnd = random.Random(seed)
-    top = MERGE_TOP - rnd.uniform(0.0, 0.8)
-    end_z = MERGE_Z - 0.1
-    into = (c + n * 0.5).xy.normalized() * rnd.uniform(0.16, 0.24)
+    top = JOIN_TOP - rnd.uniform(0.0, 0.4)
+    end_z = STREAMS_FADE[1] - 0.1
+    lip_xy = (c + n * 0.5).xy
+    slot = Vector((lip_xy.x * 0.12, lip_xy.y * 2.6 + lip_xy.x * 0.4))
     merging = [0.0] * len(path)
     while z > end_z:
         z = max(z - 0.04, end_z)
         drop = lip.z - z
-        m = ease((top - z) / (top - MERGE_Z))
-        wander = noise.noise(Vector((drop * 0.9, seed, 0))) * 0.06 * min(1, drop) * (1 - m)
+        m = ease((top - z) / (top - JOIN_Z))
+        wander = noise.noise(Vector((drop * 0.9, seed, 0))) * 0.05 * min(1, drop) * (1 - m)
         p = c + n * (0.5 + math.sqrt(drop / k)) + t * wander + Vector((0, 0, z))
-        p.xy = p.xy.lerp(into, m)
-        twist = math.radians(200) * m * m
-        p.xy = Vector((p.x * math.cos(twist) - p.y * math.sin(twist), p.x * math.sin(twist) + p.y * math.cos(twist)))
+        p.xy = p.xy.lerp(slot, m)
         path.append(p)
         merging.append(m)
     full = [*centres, *path]
@@ -408,13 +409,18 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
     flow = [0.0] * len(centres)
     for i, p in enumerate(path, start=len(centres)):
         tangent = (full[min(i + 1, len(full) - 1)] - full[i - 1]).normalized()
-        side = (t - tangent * t.dot(tangent)).normalized()
+        m = merging[i - len(centres)]
+        # Turning to lie flat along the curtain line as it joins, facing across the lake.
+        across = t.lerp(Vector((0, 1 if t.y >= 0 else -1, 0)), m)
+        side = (across - tangent * across.dot(tangent)).normalized()
         up = tangent.cross(side).normalized()
         after = lengths[i] - lip_length
         f = after / (total - lip_length)
-        squeeze = 1 - 0.25 * merging[i - len(centres)]
-        width = hw * 0.8 * (1 + 0.45 * f) * (1 + 0.08 * noise.noise(Vector((lengths[i] * 1.5, seed, 1)))) * squeeze
+        width = hw * 0.8 * (1 + 0.45 * f) * (1 + 0.08 * noise.noise(Vector((lengths[i] * 1.5, seed, 1))))
         thick = (0.022 + 0.05 * min(1, f * 3)) * trickle(hw)
+        # Spreading into a flat ribbon wide enough to overlap its neighbours by the join.
+        width = lerp(width, 0.3, m)
+        thick = lerp(thick, 0.035, m)
         # The channel's shape morphs into the falling column over the first 25 cm.
         morph = ease(after / 0.25)
         fl = ease(after / 0.3)
@@ -461,40 +467,31 @@ def waterfall(name, n, along, hw, zb, seed, material, ring=24):
     return o, full[-1]
 
 
-def main_fall(name, material, ring=48):
-    """The big fall the streams braid into: a column turned around the axis under the planter, crowned with churning
-    white water where they join, rippled lengthwise, landing in the middle of the pool."""
+def main_fall(name, material, ring=64):
+    """The one big fall the streams join into: a flat curtain across the view, as wide as the streams' comb where they
+    meet and widening a little toward the pool, a little deeper as it falls, rippled lengthwise."""
     bottom = POOL_Z - 0.15
     rings, lengths, foam, fade = [], [], [], []
     z = MAIN_TOP
     length = 0.0
     while True:
-        h = MAIN_TOP - z
-        if h < 0.3:
-            radius = 0.3 * math.sin(max(h, 0.002) / 0.3 * math.pi / 2)  # low, rounded crown inside the braid
-        else:
-            radius = lerp(0.3, 0.42, ease((h - 0.3) / (MAIN_TOP - bottom - 0.3)))
-        # Below the braid it spreads as it falls, so it holds its own against the giant biome it lands in.
-        # It opens out quickly just below the braid, then drops almost straight at full width: a curtain, not a skirt.
-        radius += SPREAD * (ease((MERGE_Z - z) / 1.4) * 0.85 + 0.15 * max(0.0, (MERGE_Z - z) / (MERGE_Z - bottom)))
+        u = (MAIN_TOP - z) / (MAIN_TOP - bottom)
+        half_width = lerp(CURTAIN_TOP_HALF, CURTAIN_BOTTOM_HALF, ease(u))
+        half_depth = lerp(0.12, 0.9, ease(min(1.0, u * 2)))
         centre = Vector((noise.noise(Vector((z * 0.6, 4.2, 0))) * 0.04, noise.noise(Vector((z * 0.6, 7.7, 0))) * 0.04, z))
         ring_verts = []
         for j in range(ring):
             a = 2 * math.pi * j / ring
-            ridge = 1 + 0.07 * noise.noise(Vector((math.cos(a) * 2.2, math.sin(a) * 2.2, z * 0.7)))
-            # A curtain more than a column: wider across the landing's view (y) than it is deep (x), increasingly so as it
-            # spreads, like the reference's fall.
-            wide = 1 + 0.6 * ease((MERGE_Z - z) / 1.4)
-            ring_verts.append(centre + Vector((math.cos(a) / wide, math.sin(a) * wide, 0)) * radius * ridge)
+            ridge = 1 + 0.06 * noise.noise(Vector((math.cos(a) * 2.2, math.sin(a) * 2.2, z * 0.7)))
+            ring_verts.append(centre + Vector((math.cos(a) * half_depth, math.sin(a) * half_width, 0)) * ridge)
         rings.append(ring_verts)
         lengths.append(length)
-        foam.append(max(1 - ease(h / 0.6), max(0.0, 1 - (z - bottom) / 0.35)))
+        foam.append(max(0.0, 1 - (z - bottom) / 0.35))
         fade.append(ease((MAIN_FADE[0] - z) / (MAIN_FADE[0] - MAIN_FADE[1])))
         if z <= bottom:
             break
-        step = 0.02 if h < 0.3 else 0.06
-        z = max(z - step, bottom)
-        length += step
+        z = max(z - 0.06, bottom)
+        length += 0.06
     bm = bmesh.new()
     uv_layer = bm.loops.layers.uv.new('UVMap')
     verts = [[bm.verts.new(v) for v in r] for r in rings]

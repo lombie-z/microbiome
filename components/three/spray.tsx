@@ -134,7 +134,7 @@ function fallSurface(scene: Object3D) {
 const POOL_Y = -11;
 // The big fall's foot (art/build-spill.py): a curtain about 3 deep (x) and 7.7 wide (z) where it meets the pool.
 const FALL_FOOT = 3.2;
-const BRAID_Y = -6.5;
+const BRAID_Y = -3.6; // where the streams join (art/build-spill.py JOIN_Z)
 
 /** Gives a system an opacity that follows the landing (0 to 1), set in Spray's frame loop. */
 function withLanding(system: ReturnType<typeof particles>, opacity: (landing: number) => number) {
@@ -224,7 +224,7 @@ export function Spray({ scene }: { scene: Object3D }) {
         }),
         (landing) => 0.3 * landing
       ),
-      // A softer haze where the streams braid into one.
+      // A softer haze where the streams join into one.
       particles({
         count: 40,
         gravity: 0,

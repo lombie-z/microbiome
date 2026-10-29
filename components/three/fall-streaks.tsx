@@ -9,7 +9,7 @@ import { waterLanding } from './water';
 // The big fall's body: thousands of white streaks pouring down the curtain (art/build-spill.py main_fall) and
 // accelerating as they go, which is what makes falling water read as water. Each is a thin quad, upright and turned to
 // face the camera, stretched with its speed. The fall's mesh is the faint sheet behind them.
-const TOP = -5.9; // in the braid's lower end, where the streams have fused
+const TOP = -3.4; // where the streams have joined into one curtain (art/build-spill.py JOIN_Z)
 const LANDING_TOP = 0.6; // at the landing the curtain pours from above the frame, as the reference's fall
 const BOTTOM = -11.05; // the pool
 const RX = 1.45; // the curtain's half-depth (three x)
@@ -46,10 +46,11 @@ void main() {
   float t = fract(uTime / life + aPhase) * life;
   float fallen = aSpeed * t + 0.5 * g * t * t;
   float v = aSpeed + g * t;
-  // Pour out of the braid's narrow end and fan out into the full curtain over the first metre and a half.
+  // A flat curtain from where the streams join (as wide as their comb there, art/build-spill.py CURTAIN_TOP_HALF),
+  // widening a little toward the pool.
   vec3 centre = vec3(aStart.x, top - fallen, aStart.z);
-  // At the landing it's one broad curtain from the top, a little narrower than the braid's fan and widening slowly.
-  float fan = mix(mix(0.12, 1.0, smoothstep(0.0, 1.6, fallen)), mix(0.62, 0.78, fallen / drop), uLanding);
+  // At the landing it's one broad curtain from the top of the frame.
+  float fan = mix(mix(0.45, 0.78, fallen / drop), mix(0.62, 0.78, fallen / drop), uLanding);
   centre.xz *= fan;
   // Stretch with speed (motion blur), widen a touch as it falls and breaks up.
   // (Shorter at the landing, where the curtain is seen whole and long smears would blur its texture.)
@@ -59,8 +60,9 @@ void main() {
   vec3 p = centre + right * position.x * width + vec3(0.0, 1.0, 0.0) * position.y * len;
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   vQuad = position.xy * 2.0;
-  // Fade in below the braid and out into the splash.
-  vAlpha = smoothstep(0.0, 0.9, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * mix(1.0, profile(aLane), uLanding);
+  // Fade in below the join and out into the splash.
+  // (A long fade-in below the join on the way down, so the curtain grows out of the streams with no edge.)
+  vAlpha = smoothstep(0.0, mix(2.6, 0.9, uLanding), fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * mix(1.0, profile(aLane), uLanding);
   vShade = aShade;
 }`;
 
@@ -73,7 +75,7 @@ varying float vShade;
 varying vec2 vQuad;
 void main() {
   float a = (1.0 - vQuad.x * vQuad.x) * (1.0 - smoothstep(0.3, 1.0, abs(vQuad.y)));
-  // Thinner on the way down beside the braid (the camera is right in it), full at the landing.
+  // Thinner on the way down (the camera is close), full at the landing.
   gl_FragColor = vec4(uColor * vShade, a * vAlpha * uOpacity * mix(0.6, 0.55, uLanding));
   #include <colorspace_fragment>
 }`;

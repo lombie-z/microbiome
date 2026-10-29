@@ -168,14 +168,13 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     const root = scene.getObjectByName('MicroBiome') ?? scene;
     return root.children.filter((o) => !isSkyPart(o.name));
   }, [scene]);
-  // Its materials fade (dithered, so nothing needs sorting; fully opaque at 1, so the hero is untouched).
+  // Its materials fade out (drawn as transparent only while fading, so the hero is untouched).
   const toyMaterials = useMemo(() => {
     const set = new Set<Material>();
     for (const o of toy)
       o.traverse((c) => {
         const m = (c as Mesh).material;
         for (const material of Array.isArray(m) ? m : m ? [m] : []) {
-          material.alphaHash = true;
           set.add(material);
         }
       });
@@ -270,7 +269,10 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
     // The planter recedes into the haze above on the pull-back; its streams then pour out of the sky.
     const presence = toyPresence(journey.frame);
-    for (const m of toyMaterials) m.opacity = presence;
+    for (const m of toyMaterials) {
+      m.opacity = presence;
+      m.transparent = presence < 0.999;
+    }
     for (const o of toy) o.visible = presence > 0.001;
     waterFromSky.value = 1 - presence;
     for (const a of animated) {

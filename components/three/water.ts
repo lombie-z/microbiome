@@ -22,7 +22,7 @@ export type WaterKind = 'falling' | 'still' | 'pool';
 
 /** Shared clock for every water material; advance it once a frame. */
 export const waterTime = { value: 0 };
-/** How far into the landing the camera is (lib/journey.ts landingAt): the braid there gives way to the white curtain. */
+/** How far into the landing the camera is (lib/journey.ts landingAt): the streams there give way to the strand curtain. */
 export const waterLanding = { value: 0 };
 /** Once the planter's left behind, the streams come out of the sky (lib/journey.ts streamsFromSky). */
 export const waterFromSky = { value: 0 };
@@ -33,8 +33,9 @@ export function waterMaterial(kind: WaterKind): Material {
   // bloom turns that into black specks.
   const pool = kind === 'pool';
   const material = new MeshPhysicalMaterial({
-    roughness: pool ? 0.18 : 0.1,
-    clearcoat: pool ? 0.35 : 1,
+    // (Falling water is aerated, a froth of white rather than a mirror: little gloss.)
+    roughness: pool ? 0.18 : kind === 'falling' ? 0.35 : 0.1,
+    clearcoat: pool ? 0.35 : kind === 'falling' ? 0.2 : 1,
     clearcoatRoughness: pool ? 0.12 : 0.1,
     specularIntensity: pool ? 0.45 : 1,
     transparent: true,
@@ -109,16 +110,14 @@ ${NOISE}`
   streak = smoothstep(0.6, 0.78, streak) * 0.65 * vFlow;
   float churn = smoothstep(0.35, 0.65, waterNoise(vec2(vFlowUv.x * 22.0, (along - uTime * 1.2) * 5.0)));
   white = max(streak, vFoam * churn);
-  // The big fall turns white as it drops: aerated water, as in a real fall.
-  // Below the braid it's a white, streaming curtain: fine vertical streaks racing down, nearly opaque.
-  // At the landing the whole fall is aerated: one white curtain from the top of the frame (the braid behind it).
   // Real water from the planter's lip down: white, aerated, streaming.
   float aerated = 0.9 * vFlow;
-  float fine = waterNoise(vec2(vFlowUv.x * 40.0, (along - uTime * 2.6) * 0.6)) * 0.7 + waterNoise(vec2(vFlowUv.x * 110.0, (along - uTime * 3.4) * 1.5)) * 0.3;
+  float fine = waterNoise(vec2(vFlowUv.x * 60.0, (along - uTime * 2.6) * 0.8)) * 0.6 + waterNoise(vec2(vFlowUv.x * 170.0, (along - uTime * 3.4) * 2.0)) * 0.4;
   float streaks = smoothstep(0.32, 0.68, fine);
   white = max(white, aerated * streaks);
   // Between the streaks the curtain is thinner and shadowed: a cool grey you can half see through.
-  water = mix(water, vec3(0.62, 0.66, 0.72), aerated * (1.0 - streaks) * 0.8);
+  // Between the streaks the water is thinner, lit warm by the low sun, not silver.
+  water = mix(water, vec3(0.92, 0.84, 0.8), aerated * (1.0 - streaks) * 0.9);
 #endif
 #ifdef POOL
   // Rings spreading out from where the big fall lands.
@@ -130,7 +129,9 @@ ${NOISE}`
   diffuseColor.a = mix(mix(0.95, 0.85, vFlow), 1.0, white) * vFade;
 #ifdef FALLING
   // The streak particles (components/three/fall-streaks.tsx) carry the curtain; the mesh is a faint sheet behind.
-  diffuseColor.a *= mix(1.0, mix(0.2, 0.45, streaks), aerated) * (1.0 - 0.85 * uLanding);
+  // (Fuller white on the way down, where the streams carry the fall themselves; a faint sheet at the landing, where
+  // the strands do.)
+  diffuseColor.a *= mix(1.0, mix(mix(0.5, 0.2, uLanding), mix(0.9, 0.45, uLanding), streaks), aerated) * (1.0 - 0.85 * uLanding);
   // Once the planter's gone (the toy's left behind above), the streams come out of the sky: their tops fade away.
   diffuseColor.a *= mix(1.0, smoothstep(-0.3, -3.0, vWorld.y), uFromSky);
   // Sunlit streaks glow past white, so the bloom gives the curtain its luminous edge.
