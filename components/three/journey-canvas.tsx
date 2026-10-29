@@ -68,18 +68,36 @@ function Expose() {
   return null;
 }
 
+/**
+ * Trying a pixel-art look: ?pixel=N renders the scene at 1/N of the screen's resolution and scales it up with hard
+ * pixel edges. Far cheaper to draw (every pass scales with pixel count); off unless asked for.
+ */
+const pixelSize = () => {
+  if (typeof window === 'undefined') return 0;
+  const n = Number(new URLSearchParams(window.location.search).get('pixel'));
+  return n > 1 ? n : 0;
+};
+
 export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => void; onProgress: (progress: number) => void }) {
   const [sun, setSun] = useState<Mesh | null>(null);
   const [light] = useState(isLightDevice);
   // Resolution adapts to the machine: down toward 1 while frames are slow, back up (to the cap) when there's room.
-  const maxDpr = light ? 1.5 : 1.75;
+  const [pixel] = useState(pixelSize);
+  const maxDpr = pixel ? 1 / pixel : light ? 1.5 : 1.75;
   const [dpr, setDpr] = useState(maxDpr);
   const wanted = useRef(maxDpr);
   return (
-    <Canvas shadows={!flag('noshadow')} flat dpr={dpr} gl={{ antialias: false }} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
+    <Canvas
+      shadows={!flag('noshadow')}
+      flat
+      dpr={dpr}
+      gl={{ antialias: false }}
+      style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, imageRendering: pixel ? 'pixelated' : undefined }}
+    >
       <PerformanceMonitor
         bounds={(refresh) => (refresh > 90 ? [50, 90] : [40, 58])}
         onChange={({ factor }) => {
+          if (pixel) return;
           wanted.current = Math.round((1 + (maxDpr - 1) * factor) * 4) / 4;
         }}
       />
