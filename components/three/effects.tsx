@@ -2,7 +2,7 @@
 
 import { useFrame } from '@react-three/fiber';
 import { Bloom, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
-import { BlendFunction, type NoiseEffect, type VignetteEffect } from 'postprocessing';
+import { BlendFunction, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
 import { type Mesh, ShaderChunk } from 'three';
 import { journey, landingAt, smoothstep } from '@/lib/journey';
@@ -28,6 +28,7 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
   const grain = useRef<NoiseEffect>(null);
   const grade = useRef<GradeEffect>(null);
   const nearBlur = useRef<NearBlurEffect>(null);
+  const rays = useRef<GodRaysEffect>(null);
 
   useFrame(() => {
     const underway = smoothstep(10, 120, journey.frame);
@@ -35,6 +36,8 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     if (vignette.current) vignette.current.darkness = 0.18 * underway + 0.12 * bloom;
     if (grain.current) grain.current.blendMode.opacity.value = 0.05 * underway;
     if (grade.current) grade.current.weight = landingAt(journey.frame);
+    // Gentler rays at the landing: full strength they wash the sky's clouds out round the sun.
+    if (rays.current) rays.current.godRaysMaterial.weight = 0.6 * (1 - 0.55 * landingAt(journey.frame));
     // The shallow focus is the landing's still shot; it clears as the camera rises away (from frame 800).
     if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
   });
@@ -44,7 +47,7 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
       <NearBlur ref={nearBlur} />
       <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
       {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
-        <GodRays sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
+        <GodRays ref={rays} sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
       )}
       <Grade ref={grade} />
       <Vignette ref={vignette} offset={0.35} darkness={0} />

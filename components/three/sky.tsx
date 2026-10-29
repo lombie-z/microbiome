@@ -2,8 +2,20 @@
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
-import { BackSide, Color, type DirectionalLight, Fog, type Mesh, ShaderMaterial, Vector3 } from 'three';
-import { BEATS, journey, smoothstep } from '@/lib/journey';
+import {
+  BackSide,
+  Color,
+  type DirectionalLight,
+  Fog,
+  type Mesh,
+  RepeatWrapping,
+  ShaderMaterial,
+  SRGBColorSpace,
+  type Texture,
+  TextureLoader,
+  Vector3,
+} from 'three';
+import { BEATS, journey, landingAt, smoothstep } from '@/lib/journey';
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -39,6 +51,8 @@ uniform vec3 uSun;
 uniform float uOpacity;
 uniform float uTime;
 uniform float uDebug;
+uniform sampler2D uPhotoSky;
+uniform float uPhoto;
 varying vec3 vDirection;
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float vnoise3(vec3 p) {
@@ -97,10 +111,48 @@ void main() {
   float edge = 1.0 - smoothstep(0.5, 0.6, body);
   cloud += uGlow * (pow(toward, 4.0) * 0.35 + pow(toward, 16.0) * 1.0) * (0.3 + lit + edge * 1.5);
   sky = mix(sky, cloud, c * smoothstep(0.0, 0.1, d.y));
+  // At the landing, a photographed sky (Poly Haven's citrus_orchard_road_puresky, CC0) takes over: real heaped cumulus
+  // where noise can only approximate them. It's turned so its low sun sits behind ours, and regraded from its blue
+  // evening into the reference's palette: lavender gaps, rose-mauve cloud bodies, peach and gold where they're lit.
+  // (Turned so the field of cumulus its low sun lights up fills the view toward ours.)
+  if (uPhoto > 0.001) {
+    float u = atan(d.z, d.x) / 6.28318 + 0.5;
+    float uSunAz = atan(uSun.z, uSun.x) / 6.28318 + 0.5;
+    float elev = asin(clamp(d.y, 0.0, 1.0)) / 1.5708;
+    vec3 photo = texture2D(uPhotoSky, vec2(fract(u - uSunAz + 0.5), max(elev, 0.003))).rgb;
+    // (Its brightness as seen, not linear, so the grade's thresholds sit where the eye puts them.)
+    float l = pow(dot(photo, vec3(0.2126, 0.7152, 0.0722)), 1.0 / 2.2);
+    // Clear sky is blue in the photo, cloud is grey to white: tell them apart by colour, not brightness.
+    float lin = max(dot(photo, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
+    float blueness = (photo.b - 0.5 * (photo.r + photo.g)) / lin;
+    float cloud = 1.0 - smoothstep(0.12, 0.45, blueness);
+    float k = smoothstep(0.4, 0.92, l);
+    vec3 gap = mix(vec3(0.72, 0.58, 0.8), vec3(0.98, 0.74, 0.76), smoothstep(0.0, 0.25, 0.3 - d.y)) * (0.62 + 0.3 * l);
+    vec3 body = mix(vec3(0.7, 0.45, 0.52), vec3(1.3, 0.86, 0.62), k) * (0.6 + 0.8 * k);
+    vec3 graded = mix(gap, body, cloud);
+    graded += uGlow * (pow(toward, 8.0) * 0.25 + pow(toward, 60.0) * 0.9 + pow(toward, 900.0) * 4.0);
+    // Cloud edges near the sun catch fire.
+    graded += uGlow * pow(toward, 4.0) * cloud * k * 0.6;
+    // Down at the horizon, the warm haze.
+    graded = mix(mix(uHorizon, uGlow, pow(toward, 4.0) * 0.5), graded, smoothstep(0.0, 0.1, d.y));
+    sky = mix(sky, graded, uPhoto);
+  }
   if (uDebug > 0.5) sky = vec3(c, body, lit);
   gl_FragColor = vec4(sky, uOpacity);
   #include <colorspace_fragment>
 }`;
+
+let photo: Texture | null = null;
+/** The landing's photographed sky (public/textures/landing/sky-clouds.jpg: the upper half of the panorama). */
+function photoSky() {
+  if (!photo) {
+    photo = new TextureLoader().load('/textures/landing/sky-clouds.jpg');
+    photo.colorSpace = SRGBColorSpace;
+    photo.wrapS = RepeatWrapping;
+    photo.anisotropy = 4;
+  }
+  return photo;
+}
 
 /** The sky dome, fog and warm sun light, all following the journey. */
 export function Sky({ sun }: { sun: Mesh | null }) {
@@ -125,6 +177,8 @@ export function Sky({ sun }: { sun: Mesh | null }) {
           uDebug: { value: process.env.NODE_ENV === 'development' && window.location.search.includes('skydebug') ? 1 : 0 },
           uSun: { value: SUN_POSITION.clone().normalize() },
           uOpacity: { value: 0 },
+          uPhotoSky: { value: photoSky() },
+          uPhoto: { value: 0 },
         },
         side: BackSide,
         transparent: true,
@@ -147,6 +201,7 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     const f = journey.frame;
     const bloom = bloomAt(f);
     material.uniforms.uOpacity.value = bloom;
+    material.uniforms.uPhoto.value = landingAt(f);
     material.uniforms.uTime.value = state.clock.elapsedTime;
     dome.current?.position.copy(camera.position);
 
