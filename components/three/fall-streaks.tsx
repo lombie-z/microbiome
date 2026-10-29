@@ -15,7 +15,17 @@ const BOTTOM = -11.05; // the pool
 const RX = 1.45; // the curtain's half-depth (three x)
 const RZ = 3.75; // its half-width across the landing's view (three z)
 
+// At the landing the curtain splits as the reference's does: a broad main fall, a gap with a few threads, and a thin
+// fall to its right. t runs across the curtain from its left edge (as the landing sees it) to its right.
+const PROFILE = /* glsl */ `
+float profile(float t) {
+  float main = smoothstep(0.0, 0.07, t) * (1.0 - smoothstep(0.56, 0.63, t));
+  float thin = smoothstep(0.73, 0.77, t) * (1.0 - smoothstep(0.86, 0.9, t)) * 0.75;
+  return max(max(main, thin), 0.06);
+}`;
+
 const vertexShader = /* glsl */ `
+${PROFILE}
 uniform float uTime;
 uniform float uLanding;
 attribute vec3 aStart;
@@ -23,6 +33,7 @@ attribute float aSpeed;
 attribute float aPhase;
 attribute float aWidth;
 attribute float aShade;
+attribute float aLane;
 varying float vAlpha;
 varying float vShade;
 varying vec2 vQuad;
@@ -41,26 +52,28 @@ void main() {
   float fan = mix(mix(0.12, 1.0, smoothstep(0.0, 1.6, fallen)), mix(0.62, 0.78, fallen / drop), uLanding);
   centre.xz *= fan;
   // Stretch with speed (motion blur), widen a touch as it falls and breaks up.
-  float len = 0.25 + v * 0.09;
+  float len = 0.14 + v * 0.06;
   float width = aWidth * (1.0 + fallen * 0.08);
   vec3 right = normalize(vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]));
   vec3 p = centre + right * position.x * width + vec3(0.0, 1.0, 0.0) * position.y * len;
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   vQuad = position.xy * 2.0;
   // Fade in below the braid and out into the splash.
-  vAlpha = smoothstep(0.0, 0.9, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen));
+  vAlpha = smoothstep(0.0, 0.9, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * mix(1.0, profile(aLane), uLanding);
   vShade = aShade;
 }`;
 
 const fragmentShader = /* glsl */ `
 uniform vec3 uColor;
 uniform float uOpacity;
+uniform float uLanding;
 varying float vAlpha;
 varying float vShade;
 varying vec2 vQuad;
 void main() {
   float a = (1.0 - vQuad.x * vQuad.x) * (1.0 - smoothstep(0.3, 1.0, abs(vQuad.y)));
-  gl_FragColor = vec4(uColor * vShade, a * vAlpha * uOpacity);
+  // Thinner on the way down beside the braid (the camera is right in it), full at the landing.
+  gl_FragColor = vec4(uColor * vShade, a * vAlpha * uOpacity * mix(0.6, 1.0, uLanding));
   #include <colorspace_fragment>
 }`;
 
@@ -75,6 +88,7 @@ void main() {
 }`;
 
 const sheetFragment = /* glsl */ `
+${PROFILE}
 uniform float uTime;
 uniform float uLanding;
 varying vec2 vUv;
@@ -86,11 +100,11 @@ float fNoise(vec2 p) {
 }
 void main() {
   // Vertical ropes racing down, brighter and dimmer.
-  float ropes = fNoise(vec2(vUv.x * 38.0, vUv.y * 3.0 + uTime * 1.4)) * 0.65 + fNoise(vec2(vUv.x * 110.0, vUv.y * 6.0 + uTime * 2.2)) * 0.35;
+  float ropes = fNoise(vec2(vUv.x * 60.0, vUv.y * 4.0 + uTime * 1.4)) * 0.6 + fNoise(vec2(vUv.x * 170.0, vUv.y * 9.0 + uTime * 2.2)) * 0.4;
   float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
   // Frayed sides: the ropes thin out toward the edges.
   edge *= smoothstep(0.2, 0.5, ropes + edge * 0.5);
-  float a = uLanding * edge * mix(0.55, 0.9, ropes) * smoothstep(0.0, 0.04, vUv.y);
+  float a = uLanding * edge * mix(0.55, 0.9, ropes) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(vUv.x));
   // Deep shadowed gaps between bright ropes, as in the reference's fall.
   vec3 c = vec3(1.25, 1.2, 1.12) * mix(0.45, 1.1, smoothstep(0.25, 0.75, ropes)) * mix(1.0, 0.88, vUv.x);
   gl_FragColor = vec4(c, a);
@@ -99,7 +113,7 @@ void main() {
 
 export function FallStreaks() {
   const { geometry, material } = useMemo(() => {
-    const count = isLightDevice() ? 2500 : 7000;
+    const count = isLightDevice() ? 3500 : 10000;
     const geometry = new InstancedBufferGeometry();
     const quad = new PlaneGeometry(1, 1);
     geometry.index = quad.index;
@@ -109,9 +123,10 @@ export function FallStreaks() {
     const phase = new Float32Array(count);
     const width = new Float32Array(count);
     const shade = new Float32Array(count);
+    const laneAt = new Float32Array(count);
     // Water in a fall travels in strands: lanes across the curtain, some thick with water and some thin, so it shows
     // bright ropes with darker gaps rather than an even smear.
-    const LANES = 64;
+    const LANES = 96;
     const lanes = Array.from({ length: LANES }, (_, k) => ({
       at: (k + 0.5) / LANES,
       weight: 0.15 + Math.random() ** 2 * 1.6,
@@ -133,11 +148,12 @@ export function FallStreaks() {
       start[i * 3] = (Math.random() * 2 - 1) * RX * 0.8;
       start[i * 3 + 1] = TOP;
       start[i * 3 + 2] = across * RZ;
+      laneAt[i] = lane.at;
       speed[i] = 2.5 + Math.random() * 2.5;
       phase[i] = Math.random();
       // Mostly fine streaks, with some broad and soft: the curtain's white body round the ropes.
       const body = Math.random() < 0.18;
-      width[i] = body ? 0.12 + Math.random() * 0.15 : 0.02 + Math.random() * 0.045;
+      width[i] = body ? 0.1 + Math.random() * 0.12 : 0.012 + Math.random() * 0.03;
       // Sunlit on the sun's side (-z), greyer in the thin lanes.
       shade[i] = (body ? 0.85 : 0.75 + Math.random() * 0.35) * (0.85 + 0.15 * Math.min(lane.weight, 1)) * (1.0 - 0.1 * Math.sin(a));
     }
@@ -146,6 +162,7 @@ export function FallStreaks() {
     geometry.setAttribute('aPhase', new InstancedBufferAttribute(phase, 1));
     geometry.setAttribute('aWidth', new InstancedBufferAttribute(width, 1));
     geometry.setAttribute('aShade', new InstancedBufferAttribute(shade, 1));
+    geometry.setAttribute('aLane', new InstancedBufferAttribute(laneAt, 1));
     geometry.instanceCount = count;
     const material = new ShaderMaterial({
       vertexShader,

@@ -17,7 +17,7 @@ const CLOUD_SHADE = new Color('#c48fa3');
 const WARM_LIGHT = new Color('#ffcba3');
 /** Where the sun sits (art/build-sky.py), in three.js space (y up). */
 export const SUN_POSITION = new Vector3(47.6, 7.4, -47.4);
-const LANDING_LIGHT = new Vector3(-20, 16, -42);
+const LANDING_LIGHT = new Vector3(8, 14, -60);
 
 /** 0 above the clouds, 1 once the sun is fully out. */
 export const bloomAt = (frame: number) => smoothstep(BEATS.sunIn, BEATS.sunFull, frame);
@@ -79,14 +79,16 @@ void main() {
     float ang = atan(dot(v, t2), dot(v, t1));
     float rays = pow(abs(cos(ang * 7.0)), 60.0) * (0.5 + 0.5 * hash3(vec3(floor(ang * 7.0 / 3.14159 + 0.5))));
     rays += pow(abs(cos(ang * 11.0 + 0.4)), 120.0) * 0.6;
-    sky += uGlow * rays * pow(toward, 400.0) * 3.0;
+    sky += uGlow * rays * pow(toward, 140.0) * 2.5;
   }
   // Heaped clouds over half the sky: mauve-rose cores, gold where they face the low sun (the layer's density a step
   // toward the sun is lower there), bright silver linings near it; thinning into the horizon haze.
   vec2 q = cloudPlane(d);
   float body = clouds(q);
-  // Fewer clouds low down, toward the sun's clear glow.
-  float c = smoothstep(0.5, 0.535, body + 0.06 * smoothstep(0.05, 0.3, d.y) - 0.08 * smoothstep(0.6, 0.95, toward));
+  // Fewer clouds low down, toward the sun's clear glow; crisp edges in the distance, softer overhead (where the layer
+  // is close and its heaps would read as flat cut-outs).
+  float soft = 0.07 * smoothstep(0.2, 0.7, d.y);
+  float c = smoothstep(0.47 - soft, 0.505 + soft, body + 0.06 * smoothstep(0.05, 0.3, d.y) - 0.08 * smoothstep(0.6, 0.95, toward));
   vec2 toSun = normalize(uSun.xz + 1e-4);
   float lit = clamp((body - clouds(q + toSun * 0.09)) * 5.0 + 0.45, 0.0, 1.0);
   vec3 cloud = mix(uCloudShade, uCloudLit, lit);

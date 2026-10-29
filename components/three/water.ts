@@ -125,7 +125,7 @@ ${NOISE}`
   diffuseColor.a = mix(mix(0.95, 0.85, vFlow), 1.0, white) * vFade;
 #ifdef FALLING
   // The streak particles (components/three/fall-streaks.tsx) carry the curtain; the mesh is a faint sheet behind.
-  diffuseColor.a *= mix(1.0, mix(0.2, 0.45, streaks), aerated) * (1.0 - 0.6 * uLanding);
+  diffuseColor.a *= mix(1.0, mix(0.2, 0.45, streaks), aerated) * (1.0 - 0.85 * uLanding);
   // Sunlit streaks glow past white, so the bloom gives the curtain its luminous edge.
   totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * aerated * streaks * 0.45;
   // Ragged, broken edges where the curtain is seen edge-on: it frays into separate streams rather than ending in a

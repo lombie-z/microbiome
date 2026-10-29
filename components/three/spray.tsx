@@ -50,9 +50,11 @@ void main() {
   if (uSoftness > 0.9) {
     vec2 q = gl_PointCoord * 3.0 + vSeed;
     float b = sNoise(q) * 0.6 + sNoise(q * 2.3) * 0.3 + sNoise(q * 5.1) * 0.1;
-    a *= smoothstep(0.35, 0.62, b + (1.0 - d) * 0.35);
+    a *= smoothstep(0.38, 0.58, b + (1.0 - d) * 0.35);
   }
-  gl_FragColor = vec4(uColor, a * vAlpha * uOpacity);
+  // Soft sprites are lit from above: brighter crowns, shadowed undersides.
+  vec3 colour = uColor * (uSoftness > 0.9 ? mix(0.78, 1.12, 1.0 - gl_PointCoord.y) : 1.0);
+  gl_FragColor = vec4(colour, a * vAlpha * uOpacity);
   #include <colorspace_fragment>
 }`;
 
@@ -61,7 +63,7 @@ interface System {
   /** Writes one particle's start, velocity, life (s) and size (m). */
   emit: (i: number, start: Vector3, velocity: Vector3) => { life: number; size: number };
   gravity: number;
-  color: string;
+  color: string | Color;
   opacity: number;
   softness: number;
 }
@@ -207,7 +209,8 @@ export function Spray({ scene }: { scene: Object3D }) {
         particles({
           count: Math.round(520 * share),
           gravity: 0,
-          color: '#fff3e6',
+          // Past white: backlit by the low sun, it blooms, as the reference's billows blaze.
+          color: new Color(1.5, 1.38, 1.2),
           opacity: 0,
           softness: 1,
           emit: (_, start, velocity) => {

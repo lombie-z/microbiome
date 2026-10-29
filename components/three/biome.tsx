@@ -163,7 +163,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       } else if (name === 'Sun') {
         // Brighter than white so the bloom catches it; the light rays need it transparent and not writing depth.
         mesh.material = new MeshBasicMaterial({
-          color: new Color(1.0, 0.72, 0.42).multiplyScalar(3),
+          color: new Color(1.0, 0.8, 0.55).multiplyScalar(7),
           transparent: true,
           opacity: 0,
           depthWrite: false,
