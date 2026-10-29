@@ -115,11 +115,14 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         // Blades olive rather than spring green (the grade's vibrance lifts them).
         colour:
           // (Heads: speckled tan and dark brown, as packed seed fibres.)
-          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
+          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); else diffuseColor.rgb *= (0.78 + 0.3 * lNoise(vLandingPos * vec3(900.0, 260.0, 900.0))) * vec3(0.92, 0.84, 0.78);',
         // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades stay smooth.
         normal: BUMP('lNoise(vLandingPos * vec3(700.0, 200.0, 700.0)) * step(0.0, diffuseColor.r - diffuseColor.g)', 0.0016),
         // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
-        light: `${BACKLIT(1.4)}
+        // (The rim glow only on the blades: the heads are dense and dark against the light.)
+        light: `if (diffuseColor.g > diffuseColor.r) {
+${BACKLIT(1.4)}
+}
 totalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.2, 0.08) * step(diffuseColor.r, diffuseColor.g);
 // Blade edges glisten: a fine bright line along each margin where the low sun catches it, broken into beads of
 // light along its length.
@@ -129,15 +132,11 @@ if (diffuseColor.g > diffuseColor.r) {
   float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
   totalEmissiveRadiance += vec3(1.0, 0.82, 0.48) * margin * beads * (0.6 + 1.4 * rim) * 3.2;
 }
-// Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
+// Cattail heads: lit only in bits down their left side (the sun's side in the frame), subtly.
 if (diffuseColor.r > diffuseColor.g) {
-  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
-  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  // Only on the side facing the sun, and only a touch.
-  float sunward = smoothstep(0.05, 0.6, dot(nW, ${SUN_DIR}) + 0.15);
-  float fibre = lNoise(vLandingPos * vec3(900.0, 260.0, 900.0));
-  float tips = smoothstep(0.75, 0.92, fibre);
-  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * (pow(rim, 2.0) * 0.45 + tips * rim * 0.6) * sunward;
+  float left = smoothstep(-0.35, -0.85, normalize(vNormal).x);
+  float bits = smoothstep(0.6, 0.85, lNoise(vLandingPos * vec3(1100.0, 320.0, 1100.0)));
+  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * left * (0.12 + bits * 0.5);
 }`,
       });
     case 'Pad':

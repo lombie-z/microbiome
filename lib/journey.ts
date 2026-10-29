@@ -17,9 +17,9 @@ export const TRACK_FRAMES = 920;
 export const BEATS = {
   /** End of the opening dolly zoom, where the fitted hero hands over to the authored path. */
   open: 80,
-  /** Below the clouds the sun comes out and the sky warms. */
-  sunIn: 275,
-  sunFull: 380,
+  /** The real sky and low sun come in as the camera leaves the hero. */
+  sunIn: 70,
+  sunFull: 170,
   /** Fog closes in once the camera is among the falls, and thins to a warm haze over the lake. */
   fogIn: 110,
   fogOut: [520, 720],
@@ -55,10 +55,8 @@ export const RAINBOW_LAYER = 2;
 export const landingAt = (frame: number) => smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], frame);
 
 /**
- * The descent's hand-over from the clay toy to the real world, so the two never share the screen: the toy's clay
- * clouds are gone just after the camera passes through them, the planter itself once it's well above, and the clay
- * streams have turned to white water by the time they braid into the real fall.
+ * The descent is real from where the water leaves the planter: the planter (the clay toy) is left behind once it's well
+ * above, and from then the streams come out of the sky.
  */
-export const toyClouds = (frame: number) => smoothstep(30, 110, frame) * (1 - smoothstep(275, 330, frame));
 export const toyVisible = (frame: number) => frame < 320;
-export const streamsWhite = (frame: number) => smoothstep(360, 520, frame);
+export const streamsFromSky = (frame: number) => smoothstep(300, 330, frame);

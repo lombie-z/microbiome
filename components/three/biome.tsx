@@ -8,7 +8,6 @@ import {
   type DirectionalLight,
   DoubleSide,
   type HemisphereLight,
-  type Material,
   type Mesh,
   MeshBasicMaterial,
   type MeshPhysicalMaterial,
@@ -16,7 +15,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep, streamsWhite, toyClouds, toyVisible } from '@/lib/journey';
+import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep, streamsFromSky, toyVisible } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -26,7 +25,7 @@ import { SilhouetteOutline } from './silhouette-outline';
 import { bloomAt, SUN_POSITION } from './sky';
 import { Spray } from './spray';
 import { useStudioReflections } from './studio-environment';
-import { waterLanding, waterMaterial, waterTime, waterWhite } from './water';
+import { waterFromSky, waterLanding, waterMaterial, waterTime } from './water';
 
 export const DRACO_PATH = '/draco/';
 const URL = '/models/micro-biome.glb';
@@ -58,23 +57,6 @@ const isSkyPart = (name: string) => SKY_PARTS.some((p) => name.startsWith(p));
 // The lettering tumbles free of the sticker outline, and the water spills off the sticker.
 function isOutsideOutline(o: Object3D) {
   return o.name.startsWith('Letter') || o.name.startsWith('Word') || isSkyPart(o.name) || isSkyPart(o.parent?.name ?? '');
-}
-
-/** Clouds stay the biome's clay outside; from inside (their back faces) they glow white, for the fly-through. */
-function whiteoutCloud(source: Material) {
-  const material = source.clone();
-  material.side = DoubleSide;
-  // Faded in (dithered, so no sorting against the water) as the camera leaves the hero.
-  material.alphaHash = true;
-  material.opacity = 0;
-  material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <dithering_fragment>',
-      '#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(0.97, 0.95, 0.93, 1.0);'
-    );
-  };
-  material.customProgramCacheKey = () => 'whiteout-cloud';
-  return material;
 }
 
 /** The rainbow: spectral bands across the arc (u: outer red to inner violet), fading at its edges and feet. */
@@ -118,7 +100,6 @@ function rainbowMaterial() {
 export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Mesh) => void }) {
   const { scene } = useGLTF(URL, DRACO_PATH);
   const rainbow = useRef<ShaderMaterial | null>(null);
-  const cloudMaterials = useRef(new Map<Material, Material>());
   const key = useRef<DirectionalLight>(null);
   const hemi = useRef<HemisphereLight>(null);
   const sun = useRef<Mesh | null>(null);
@@ -127,13 +108,12 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   useMemo(() => {
     const still = waterMaterial('still');
     const falling = waterMaterial('falling');
-    const clouds = cloudMaterials.current;
     scene.traverse((child) => {
       const mesh = child as Mesh;
       if (!mesh.isMesh) return;
       const name = ownerName(mesh);
-      // Blender's cloud material glows white inside (the fly-through); glTF carries that out as an emissive glow on
-      // the whole surface. The web does the inside itself (whiteoutCloud), so drop it.
+      // Blender's cloud material glows white inside (for its fly-through); glTF carries that out as an emissive glow on
+      // the whole surface, so drop it.
       const own = mesh.material as MeshPhysicalMaterial;
       if (own.name === 'Cloud' && own.emissive) own.emissive.setRGB(0, 0, 0);
       // Blender's glossy clay comes through with near-mirror clearcoats; their sun glints overflow the effects'
@@ -151,9 +131,8 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         mesh.material = falling;
         mesh.renderOrder = 2;
       } else if (name.startsWith('SkyCloud')) {
-        const source = mesh.material as Material;
-        if (!clouds.has(source)) clouds.set(source, whiteoutCloud(source));
-        mesh.material = clouds.get(source) as Material;
+        // The clay cloud layer: the descent is real now (the photographed sky's clouds), so it's not drawn.
+        mesh.visible = false;
       } else if (name === 'Rainbow') {
         rainbow.current = rainbowMaterial();
         mesh.material = rainbow.current;
@@ -233,15 +212,12 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         hidden.push(o);
       }
     });
-    const opacities = [...cloudMaterials.current.values()].map((m) => [m, m.visible] as const);
-    for (const [m] of opacities) m.visible = true;
     // Never let the overlay hang on it: some browsers stall parallel shader compiles (e.g. in a background tab).
     const settle = new Promise((resolve) => setTimeout(resolve, 3000));
     Promise.race([gl.compileAsync(threeScene, camera), settle])
       .catch(() => {})
       .then(() => {
         for (const o of hidden) o.visible = false;
-        for (const [m, visible] of opacities) m.visible = visible;
         requestAnimationFrame(() => requestAnimationFrame(() => live && onReady()));
         // rAF doesn't run in a hidden tab; report anyway so it's ready when the tab comes back.
         setTimeout(() => live && onReady(), 600);
@@ -275,15 +251,9 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     waterLanding.value = landing;
     if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
-    // The clay clouds belong to the toy world above; they fade just after the camera passes through them.
-    const clouds = toyClouds(journey.frame);
     const showToy = toyVisible(journey.frame);
     for (const o of toy) o.visible = showToy;
-    waterWhite.value = streamsWhite(journey.frame);
-    for (const m of cloudMaterials.current.values()) {
-      m.opacity = clouds;
-      m.visible = clouds > 0.001;
-    }
+    waterFromSky.value = streamsFromSky(journey.frame);
     for (const a of animated) {
       const { node, base, i } = a;
       switch (a.kind) {

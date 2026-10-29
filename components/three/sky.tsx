@@ -15,7 +15,7 @@ import {
   TextureLoader,
   Vector3,
 } from 'three';
-import { BEATS, journey, landingAt, smoothstep } from '@/lib/journey';
+import { BEATS, journey, smoothstep } from '@/lib/journey';
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
@@ -208,7 +208,7 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     const f = journey.frame;
     const bloom = bloomAt(f);
     material.uniforms.uOpacity.value = bloom;
-    material.uniforms.uPhoto.value = landingAt(f);
+    material.uniforms.uPhoto.value = bloom;
     material.uniforms.uTime.value = state.clock.elapsedTime;
     dome.current?.position.copy(camera.position);
 
@@ -219,8 +219,8 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     const among = smoothstep(BEATS.open, BEATS.fogIn, f);
     // (Easing out slowly, so the cliffs and lake emerge through it rather than appearing.)
     const lake = smoothstep(BEATS.fogOut[0] - 140, BEATS.fogOut[1], f) ** 0.6;
-    fog.near = lerp(lerp(1000, 0.8, among), 18, lake);
-    fog.far = lerp(lerp(2000, 5.5, among), 170, lake);
+    fog.near = lerp(lerp(1000, 3, among), 18, lake);
+    fog.far = lerp(lerp(2000, 45, among), 170, lake);
     fog.color.copy(PLASTER).lerp(SKY_HORIZON, bloom);
 
     // Low, warm, behind the scene at the landing: it rims the reeds, the frog and the spray.
