@@ -16,11 +16,14 @@ const vertexShader = /* glsl */ `
 attribute vec3 aCentre;
 attribute vec2 aSize;
 attribute float aSeed;
+attribute float aAlpha;
 varying vec2 vUv;
 varying float vSeed;
+varying float vAlpha;
 void main() {
   vUv = uv;
   vSeed = aSeed;
+  vAlpha = aAlpha;
   vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
   // Cards stand upright (heaps sit on the water) and turn to face the camera round the vertical.
   right = normalize(vec3(right.x, 0.0, right.z));
@@ -33,6 +36,7 @@ uniform float uTime;
 uniform float uOpacity;
 varying vec2 vUv;
 varying float vSeed;
+varying float vAlpha;
 float mHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float mNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
@@ -67,13 +71,13 @@ void main() {
   vec3 c = mix(shade, sun, lit) + vec3(0.6, 0.45, 0.25) * rim;
   // Lower down it's denser and darker, near the water.
   c *= mix(0.86, 1.0, smoothstep(0.0, 0.5, vUv.y));
-  gl_FragColor = vec4(c, a * uOpacity);
+  gl_FragColor = vec4(c, a * uOpacity * vAlpha);
   #include <colorspace_fragment>
 }`;
 
-// Heaps (x and z in three's space: z negative toward the sun; height; width): at the fall's foot, then trailing away
+// Heaps (x and z in three's space: z negative toward the sun; height; width; optional opacity): at the fall's foot, then trailing away
 // along the cliffs' feet into the bay as fainter veils that layer the distance.
-const HEAPS: [number, number, number, number][] = [
+const HEAPS: ([number, number, number, number] | [number, number, number, number, number])[] = [
   [-0.6, -0.5, 3.6, 5.5],
   [0.1, 1.8, 2.8, 4.2],
   [0.8, -3.0, 3.0, 4.8],
@@ -83,6 +87,10 @@ const HEAPS: [number, number, number, number][] = [
   [-0.6, -9.6, 1.3, 3.2],
   [0.1, 0.8, 4.4, 3.6],
   [0.8, -1.9, 4.0, 3.4],
+  // Spray climbing the cliffs either side of the fall, tall and thin.
+  [1.6, -4.2, 8.5, 5.0, 0.3],
+  [1.8, 3.2, 7.0, 4.0, 0.3],
+  [2.2, -8.5, 6.0, 5.5, 0.35],
   // Veils further off, in front of the spur and out into the bay.
   [4, -13, 2.2, 7],
   [9, -17, 2.6, 9],
@@ -99,7 +107,9 @@ export function MistBank() {
     const centre = new Float32Array(HEAPS.length * 3);
     const size = new Float32Array(HEAPS.length * 2);
     const seed = new Float32Array(HEAPS.length);
-    HEAPS.forEach(([x, z, height, width], i) => {
+    const alpha = new Float32Array(HEAPS.length);
+    HEAPS.forEach(([x, z, height, width, opacity = 1], i) => {
+      alpha[i] = opacity;
       centre.set([x, POOL_Y - 0.2, z], i * 3);
       size.set([width, height], i * 2);
       seed[i] = i * 0.37 + 0.1;
@@ -107,6 +117,7 @@ export function MistBank() {
     geometry.setAttribute('aCentre', new InstancedBufferAttribute(centre, 3));
     geometry.setAttribute('aSize', new InstancedBufferAttribute(size, 2));
     geometry.setAttribute('aSeed', new InstancedBufferAttribute(seed, 1));
+    geometry.setAttribute('aAlpha', new InstancedBufferAttribute(alpha, 1));
     geometry.instanceCount = HEAPS.length;
     const material = new ShaderMaterial({
       vertexShader,
