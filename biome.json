@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!node_modules", "!.next", "!public/draco"]
+    "includes": ["**", "!node_modules", "!.next", "!public/draco", "!public/journey.json", "!public/textures"]
   },
   "formatter": {
     "enabled": true,

@@ -34,5 +34,6 @@ html.lenis body {
   height: auto;
 }
 .lenis.lenis-smooth {
+  /* biome-ignore lint/complexity/noImportantStyles: Lenis's own stylesheet, so it wins over any scroll-behavior. */
   scroll-behavior: auto !important;
 }
