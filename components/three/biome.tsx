@@ -97,7 +97,7 @@ function rainbowMaterial() {
         float along = 1.0 - vUv.y;
         // pow() of a negative is NaN (and bloom smears one NaN pixel over the whole screen), so clamp first.
         float a = pow(max(sin(3.14159 * vUv.x), 0.0), 0.6) * pow(max(sin(3.14159 * along), 0.0), 0.8) * uOpacity * 0.7;
-        gl_FragColor = vec4(spectrum(vUv.x), a);
+        gl_FragColor = vec4(spectrum(vUv.x) * 1.25, min(a, 1.0));
         #include <colorspace_fragment>
       }`,
     transparent: true,
@@ -235,7 +235,8 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     waterTime.value += Math.min(delta, 1 / 20);
     if (rainbow.current) {
       const bow = smoothstep(BEATS.bowIn, BEATS.bowFull, journey.frame);
-      rainbow.current.uniforms.uOpacity.value = bow;
+      // Stronger at the landing, where it hangs bright in the fall's spray (as the reference's).
+      rainbow.current.uniforms.uOpacity.value = bow * (1 + 0.9 * landingAt(journey.frame));
       rainbow.current.visible = bow > 0.001;
     }
     // The studio key gives way to the warm sun (components/three/sky.tsx) below the clouds.
