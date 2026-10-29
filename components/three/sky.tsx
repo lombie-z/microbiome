@@ -215,13 +215,12 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     // Fog: none for the hero, close once among the falls (it hides what's far below when looking down), lifting for
     // the pool. Its colour is the sky's horizon, so things melt into the background.
     // Three states: none for the hero; close among the falls (it hides what's far below when looking down); a warm
-    // aerial haze over the lake, so the cliffs and mountains fade with distance. It thins for the final pull-back.
+    // aerial haze over the lake, so the cliffs and mountains fade with distance.
     const among = smoothstep(BEATS.open, BEATS.fogIn, f);
     // (Easing out slowly, so the cliffs and lake emerge through it rather than appearing.)
     const lake = smoothstep(BEATS.fogOut[0] - 140, BEATS.fogOut[1], f) ** 0.6;
-    const away = smoothstep(820, 900, f);
-    fog.near = lerp(lerp(1000, 0.8, among), 18, lake) + away * 20;
-    fog.far = lerp(lerp(2000, 5.5, among), 170, lake) + away * 120;
+    fog.near = lerp(lerp(1000, 0.8, among), 18, lake);
+    fog.far = lerp(lerp(2000, 5.5, among), 170, lake);
     fog.color.copy(PLASTER).lerp(SKY_HORIZON, bloom);
 
     // Low, warm, behind the scene at the landing: it rims the reeds, the frog and the spray.

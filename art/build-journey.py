@@ -12,8 +12,7 @@ against the water, at its pace, looking up at it and down along it (the site hid
   265-460  Spiral down with the streams as they braid, then look up at the braid winding overhead into the light.
   460-760  Keep looking up while drifting down and away from the fall, levelling out at the water: the landing, eye
            level on the lake (art/build-landing.py), the frog close, the fall and pink cliffs beyond.
-  760-920  Hold a moment, then rise and pull right back: the canyon below, the tiny clay biome floating far above it,
-           its falls pouring down into the real world.
+  760-920  Hold on the landing (the shot matched to art/reference/landing-pov) while the product UI comes in.
 """
 import math
 
@@ -44,10 +43,9 @@ SHOTS = [
     (690, Vector((-15.0, -1.2, -10.2)), Vector((0.0, -0.6, -8.0)), 42.0),
     # The landing (art/build-landing.py): eye level on the lake, the frog close, the fall and cliffs beyond.
     (760, Vector((-27.0, -2.5, -10.55)), Vector((0.0, 3.4, -9.2)), 38.0),  # the fall right of centre, as the reference
-    (800, Vector((-27.2, -2.55, -10.5)), Vector((0.0, 3.4, -9.15)), 38.0),
-    # Rise and pull right back: the canyon, the lake, and the tiny clay biome floating high above it all.
-    (860, Vector((-31.0, -9.0, -6.0)), Vector((-2.0, 0.0, -8.0)), 40.0),
-    (920, Vector((-42.0, -30.0, 8.0)), Vector((-2.0, 0.0, -5.0)), 40.0),
+    # Then hold on it (a barely-there drift, so it stays alive) while the product UI comes in over it.
+    (840, Vector((-27.12, -2.48, -10.55)), Vector((0.0, 3.4, -9.2)), 37.6),
+    (920, Vector((-27.2, -2.45, -10.55)), Vector((0.0, 3.4, -9.2)), 37.2),
 ]
 # Sun, warm light and rainbow come in below the clouds.
 F_SUN_IN, F_SUN_FULL = 275, 380

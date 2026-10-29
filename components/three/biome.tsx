@@ -262,9 +262,8 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     waterTime.value += Math.min(delta, 1 / 20);
     if (rainbow.current) {
       const bow = smoothstep(BEATS.bowIn, BEATS.bowFull, journey.frame);
-      // Stronger for the landing shot, where it hangs bright in the fall's spray (as the reference's); back to normal on
-      // the pull-back, where it and its reflection would ring the fall.
-      rainbow.current.uniforms.uOpacity.value = bow * (1 + 0.9 * smoothstep(720, 765, journey.frame) * (1 - smoothstep(800, 840, journey.frame)));
+      // Stronger for the landing shot, where it hangs bright in the fall's spray (as the reference's).
+      rainbow.current.uniforms.uOpacity.value = bow * (1 + 0.9 * smoothstep(720, 765, journey.frame));
       rainbow.current.visible = bow > 0.001;
     }
     // The studio key gives way to the warm sun (components/three/sky.tsx) below the clouds.

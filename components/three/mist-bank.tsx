@@ -3,7 +3,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import { InstancedBufferAttribute, InstancedBufferGeometry, PlaneGeometry, ShaderMaterial } from 'three';
-import { journey, landingAt, smoothstep } from '@/lib/journey';
+import { journey, landingAt } from '@/lib/journey';
 
 // The great billows of spray at the fall's foot, as in the reference: heaped cauliflower clouds sitting on the water,
 // their crowns blazing in the low sun and their undersides in soft shadow, thickest at the fall and trailing off along
@@ -132,8 +132,7 @@ export function MistBank() {
   useFrame((state) => {
     const landing = landingAt(journey.frame);
     material.uniforms.uTime.value = state.clock.elapsedTime;
-    // Cards read as billows only from low down: they thin out as the camera rises for the pull-back.
-    material.uniforms.uOpacity.value = 0.72 * landing * (1 - 0.75 * smoothstep(800, 860, journey.frame));
+    material.uniforms.uOpacity.value = 0.72 * landing;
   });
 
   return <mesh name="SprayMistBank" geometry={geometry} material={material} frustumCulled={false} renderOrder={5} />;
