@@ -103,12 +103,20 @@ void main() {
   // Vertical ropes racing down, brighter and dimmer.
   float ropes = fNoise(vec2(vUv.x * 60.0, vUv.y * 3.0 + uTime * 1.4)) * 0.5 + fNoise(vec2(vUv.x * 170.0, vUv.y * 7.0 + uTime * 2.2)) * 0.3
     + fNoise(vec2(vUv.x * 420.0, vUv.y * 14.0 + uTime * 3.0)) * 0.2;
-  float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+  // Packets of foam racing down the ropes: the frothy clumps that make a real fall's texture.
+  float clumps = smoothstep(0.55, 0.8, fNoise(vec2(vUv.x * 28.0, vUv.y * 5.0 + uTime * 2.6)) * 0.6
+    + fNoise(vec2(vUv.x * 80.0, vUv.y * 14.0 + uTime * 3.4)) * 0.4);
+  // Ragged sides that shift as it falls, not a clean edge: the profile is sampled a little off to each side.
+  float wobble = (fNoise(vec2(vUv.y * 9.0 + uTime * 2.0, 3.0)) - 0.5) * 0.08;
+  vec2 q = vec2(vUv.x + wobble, vUv.y);
+  float edge = smoothstep(0.0, 0.08, q.x) * smoothstep(1.0, 0.92, q.x);
   // Frayed sides: the ropes thin out toward the edges.
   edge *= smoothstep(0.2, 0.5, ropes + edge * 0.5);
-  float a = uLanding * edge * mix(0.75, 0.98, ropes) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(vUv.x));
-  // Deep shadowed gaps between bright ropes, as in the reference's fall.
-  vec3 c = vec3(1.35, 1.24, 1.08) * mix(0.45, 1.15, smoothstep(0.28, 0.72, ropes)) * mix(1.0, 0.86, vUv.x);
+  float body = max(smoothstep(0.28, 0.72, ropes), clumps);
+  // See-through in the gaps between ropes (the rock shows dark behind), solid in the ropes and foam.
+  float a = uLanding * edge * mix(0.45, 1.0, body) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(q.x));
+  vec3 c = vec3(1.35, 1.24, 1.08) * mix(0.45, 1.15, body) * mix(1.0, 0.86, vUv.x);
+  c += vec3(0.35, 0.3, 0.25) * clumps;
   // Glitter: droplets in the ropes flashing in the low sun, bright enough to bloom.
   float glitter = smoothstep(0.8, 0.95, fNoise(vec2(vUv.x * 520.0, vUv.y * 70.0 + uTime * 7.0))) * smoothstep(0.45, 0.75, ropes);
   c += vec3(1.6, 1.35, 1.0) * glitter;
