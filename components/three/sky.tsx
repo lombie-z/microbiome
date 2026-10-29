@@ -260,7 +260,7 @@ export function Sky({ sun }: { sun: Mesh | null }) {
         color={WARM_LIGHT}
         intensity={0}
         castShadow
-        shadow-mapSize={[4096, 4096]}
+        shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.0004}
         shadow-normalBias={0.04}
         shadow-camera-left={-40}

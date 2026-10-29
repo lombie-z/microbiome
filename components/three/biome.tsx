@@ -16,7 +16,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, belowVisible, journey, landingAt, ledgeIn, RAINBOW_LAYER, smoothstep, toyPresence } from '@/lib/journey';
+import { BEATS, belowVisible, devFlag, journey, landingAt, ledgeIn, RAINBOW_LAYER, smoothstep, toyPresence } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -333,10 +333,10 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         shadow-camera-bottom={-1.5}
       />
       <primitive object={scene} />
-      {!(process.env.NODE_ENV === 'development' && window.location.search.includes('nospray')) && <Spray scene={scene} />}
-      <FallStreaks />
+      {!devFlag('nospray') && <Spray scene={scene} />}
+      {!devFlag('nostreaks') && <FallStreaks />}
       <MistBank />
-      {canyon && <Foliage canyon={canyon} ledge={ledge} />}
+      {canyon && !devFlag('nofoliage') && <Foliage canyon={canyon} ledge={ledge} />}
       <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>
   );

@@ -39,6 +39,10 @@ export const smoothstep = (edge0: number, edge1: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/** Dev switches for isolating rendering costs and problems (?nofx, ?norays, ?nolake, ...); always false in production. */
+export const devFlag = (name: string) =>
+  process.env.NODE_ENV === 'development' && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has(name);
+
 /** Phones and tablets get a lighter render: fewer particles, no light rays, lower resolution. */
 export const isLightDevice = () => typeof window !== 'undefined' && (window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768);
 

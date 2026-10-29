@@ -90,7 +90,8 @@ const LakeShader = {
 export function Lake() {
   const light = isLightDevice();
   const lake = useMemo(() => {
-    const size = light ? 512 : 1024;
+    // (Half the screen's resolution is plenty: the ripples and the depth of field soften it anyway.)
+    const size = light ? 384 : 640;
     const mirror = new Reflector(new CircleGeometry(RADIUS, 128), { textureWidth: size, textureHeight: size, clipBias: 0.003, shader: LakeShader });
     mirror.name = 'Lake';
     mirror.position.copy(CENTRE);

@@ -1,11 +1,11 @@
 'use client';
 
 import { useFrame } from '@react-three/fiber';
-import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
+import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, SMAA, Vignette } from '@react-three/postprocessing';
 import { BlendFunction, type BloomEffect, type DepthOfFieldEffect, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
 import { type Mesh, ShaderChunk, type Sphere, Vector3 } from 'three';
-import { journey, landingAt, smoothstep } from '@/lib/journey';
+import { devFlag, journey, landingAt, smoothstep } from '@/lib/journey';
 import { Grade, type GradeEffect } from './grade';
 import { NearBlur, type NearBlurEffect } from './near-blur';
 import { bloomAt, SUN_POSITION } from './sky';
@@ -25,7 +25,7 @@ gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(16.0));`;
  * The finish: bloom on anything brighter than white (the sun, glints and white water), light rays from the sun, and
  * a little vignette and grain once the journey is under way. The hero has none of it, so it matches the blog.
  */
-export function Effects({ sun, multisampling }: { sun: Mesh | null; multisampling: number }) {
+export function Effects({ sun }: { sun: Mesh | null }) {
   const vignette = useRef<VignetteEffect>(null);
   const grain = useRef<NoiseEffect>(null);
   const grade = useRef<GradeEffect>(null);
@@ -76,17 +76,17 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame);
   });
 
+  // No multisampling (4x MSAA on every half-float buffer was the single biggest cost); SMAA smooths edges instead.
   return (
-    <EffectComposer multisampling={multisampling} autoClear={false}>
-      <DepthOfField ref={focus} focusDistance={7} focusRange={24} bokehScale={0} />
+    <EffectComposer multisampling={0} autoClear={false}>
+      {!devFlag('nodof') && <DepthOfField ref={focus} focusDistance={7} focusRange={24} bokehScale={0} />}
       <NearBlur ref={nearBlur} />
       <Bloom ref={bloomFx} mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
-      {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
-        <GodRays ref={rays} sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />
-      )}
+      {sun && !devFlag('norays') && <GodRays ref={rays} sun={sun} samples={60} density={0.97} decay={0.95} weight={0.6} exposure={0.62} clampMax={1} blur />}
       <Grade ref={grade} />
       <Vignette ref={vignette} offset={0.35} darkness={0} />
       <Noise ref={grain} premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0} />
+      <SMAA />
     </EffectComposer>
   );
 }
