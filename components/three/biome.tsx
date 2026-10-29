@@ -276,8 +276,10 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       m.transparent = m.opacity < 0.999;
     }
     waterLanding.value = landing;
-    if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
-    if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
+    // (The studio's flat light gives way as soon as the real sky comes in, not only at the landing.)
+    const realLight = Math.max(0.75 * bloomAt(journey.frame), landing);
+    if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * realLight);
+    if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * realLight;
     // The planter recedes into the haze above on the pull-back; its streams then pour out of the sky.
     const presence = toyPresence(journey.frame);
     for (const m of toyMaterials) {

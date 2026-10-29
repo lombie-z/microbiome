@@ -91,6 +91,10 @@ export class GradeEffect extends Effect {
     (this.uniforms.get('sunAspect') as Uniform<number>).value = aspect;
   }
 
+  set exposure(value: number) {
+    (this.uniforms.get('exposure') as Uniform<number>).value = value;
+  }
+
   set glow(value: number) {
     (this.uniforms.get('glow') as Uniform<number>).value = value;
   }

@@ -42,9 +42,14 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     // The extra glow is for the still landing shot only: on the approach, right up against the white fall, it would
     // blow out to white.
     const arrived = smoothstep(720, 765, journey.frame);
+    // Some of the landing's glow on the way down too, so the sunlit water and rock shine rather than sit flat.
+    const glow = Math.max(0.45 * bloom * (1 - smoothstep(560, 700, journey.frame)), arrived);
     if (grade.current) {
-      grade.current.weight = landingAt(journey.frame);
-      grade.current.glow = 0.55 * arrived;
+      // The warm, saturated grade comes in with the real sky as the camera leaves the hero, not only at the landing.
+      grade.current.weight = Math.max(bloom, landingAt(journey.frame));
+      // (Brighter on the way down: the landing's exposure is set for its stronger low sun.)
+      grade.current.exposure = 0.66 + 0.24 * (1 - landingAt(journey.frame));
+      grade.current.glow = 0.55 * glow;
       // Where the sun is on screen, for its starburst (only at the landing, and not when it's behind the camera).
       // (From the sun disc itself, the centre of its geometry: Blender's mesh isn't centred on its origin.)
       if (sun) {

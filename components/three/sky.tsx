@@ -23,8 +23,8 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const PLASTER = new Color('#f5f2ed');
 const SKY_TOP = new Color('#c9a9c2');
 const SKY_HORIZON = new Color('#ffd49c');
-// The photographed sky's colour on the way down, sampled from the render.
-const DESCENT_HAZE = new Color('#dfc6d4');
+// The haze on the way down: a warm peach-rose, between the photographed sky and the low sun.
+const DESCENT_HAZE = new Color('#f2c6c0');
 const SUN_GLOW = new Color('#ffad5c');
 const CLOUD_LIT = new Color('#ffc4a4');
 const CLOUD_SHADE = new Color('#c48fa3');
@@ -225,15 +225,16 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     const emerge = smoothstep(BEATS.fogIn, 280, f);
     // (Easing out slowly, so the cliffs and lake emerge through it rather than appearing.)
     const lake = smoothstep(BEATS.fogOut[0] - 140, BEATS.fogOut[1], f) ** 0.6;
-    fog.near = lerp(lerp(1000, lerp(5, 3, emerge), among), 18, lake);
-    fog.far = lerp(lerp(2000, lerp(6, 45, emerge * emerge), among), 170, lake);
+    fog.near = lerp(lerp(1000, lerp(5, 12, emerge), among), 18, lake);
+    fog.far = lerp(lerp(2000, lerp(6, 120, emerge * emerge), among), 170, lake);
     // The haze matches the photographed sky behind it on the way down (so the cliffs emerge from the sky itself), then
     // warms to the landing's horizon.
     fog.color.copy(PLASTER).lerp(DESCENT_HAZE, bloom).lerp(SKY_HORIZON, lake);
 
     // Low, warm, behind the scene at the landing: it rims the reeds, the frog and the spray.
     if (light.current) {
-      const landing = smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], f);
+      // (Most of the landing's raking light already on the way down, so the cliffs and water have shape from the start.)
+      const landing = Math.max(0.75 * bloom, smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], f));
       light.current.intensity = bloom * (0.9 + 1.1 * landing);
       // At the landing the light is cheated round to rake across the cliff faces from the left (as in the reference),
       // while the sun itself stays where it's seen, low over the saddle.
