@@ -4,11 +4,13 @@ import { useFrame } from '@react-three/fiber';
 import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
 import { BlendFunction, type BloomEffect, type DepthOfFieldEffect, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
-import { type Mesh, ShaderChunk } from 'three';
+import { type Mesh, ShaderChunk, type Sphere, Vector3 } from 'three';
 import { journey, landingAt, smoothstep } from '@/lib/journey';
 import { Grade, type GradeEffect } from './grade';
 import { NearBlur, type NearBlurEffect } from './near-blur';
-import { bloomAt } from './sky';
+import { bloomAt, SUN_POSITION } from './sky';
+
+const sunOnScreen = new Vector3();
 
 // Every built-in material ends with this chunk: keep its output finite and in range. The effects render to a
 // half-float buffer, and one Inf or NaN pixel (a sun glint on glossy clay can overflow it) gets smeared by the bloom
@@ -32,7 +34,7 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
   const focus = useRef<DepthOfFieldEffect>(null);
   const bloomFx = useRef<BloomEffect>(null);
 
-  useFrame(() => {
+  useFrame((state) => {
     const underway = smoothstep(10, 120, journey.frame);
     const bloom = bloomAt(journey.frame);
     if (vignette.current) vignette.current.darkness = 0.18 * underway + 0.12 * bloom;
@@ -43,11 +45,22 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     if (grade.current) {
       grade.current.weight = landingAt(journey.frame);
       grade.current.glow = 0.55 * arrived;
+      // Where the sun is on screen, for its starburst (only at the landing, and not when it's behind the camera).
+      // (From the sun disc itself, the centre of its geometry: Blender's mesh isn't centred on its origin.)
+      if (sun) {
+        if (!sun.geometry.boundingSphere) sun.geometry.computeBoundingSphere();
+        sunOnScreen.copy((sun.geometry.boundingSphere as Sphere).center).applyMatrix4(sun.matrixWorld);
+      } else sunOnScreen.copy(SUN_POSITION).add(state.camera.position);
+      // (The camera has moved this frame but its matrices only update when it renders.)
+      state.camera.updateMatrixWorld();
+      sunOnScreen.project(state.camera);
+      const facing = sunOnScreen.z < 1 ? 1 : 0;
+      grade.current.setSun(sunOnScreen.x * 0.5 + 0.5, sunOnScreen.y * 0.5 + 0.5, facing * arrived, state.size.width / state.size.height);
     }
     // Gentler rays at the landing: full strength they wash the sky's clouds out round the sun.
     // The landing's lens: focused on the frog, the far valley, mountains and cliffs going soft (the reference's depth
     // of field). Off everywhere else, and clearing as the camera rises away.
-    if (focus.current) focus.current.bokehScale = 1.6 * landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
+    if (focus.current) focus.current.bokehScale = 1.25 * landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
     // A livelier bloom at the landing: more of the bright scene glows (glints, lit rims, the fall, the mist).
     if (bloomFx.current) {
       bloomFx.current.luminanceMaterial.threshold = 1.1 - 0.2 * arrived;

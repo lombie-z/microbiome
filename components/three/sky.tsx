@@ -129,8 +129,14 @@ void main() {
     float k = smoothstep(0.4, 0.92, l);
     vec3 gap = mix(vec3(0.72, 0.58, 0.8), vec3(0.98, 0.74, 0.76), smoothstep(0.0, 0.25, 0.3 - d.y)) * (0.62 + 0.3 * l);
     vec3 body = mix(vec3(0.7, 0.45, 0.52), vec3(1.3, 0.86, 0.62), k) * (0.6 + 0.8 * k);
+    // Toward the sun everything warms to peach and orange: the clouds blaze, the gaps go gold.
+    float near = pow(toward, 3.0);
+    body = mix(body, vec3(1.3, 0.76, 0.46) * (0.7 + 0.7 * k), near * 0.6);
+    gap = mix(gap, vec3(1.05, 0.72, 0.5), near * 0.45);
     vec3 graded = mix(gap, body, cloud);
-    graded += uGlow * (pow(toward, 8.0) * 0.25 + pow(toward, 60.0) * 0.9 + pow(toward, 900.0) * 4.0);
+    // The sun: a big saturated orange glow round a small white-hot core (its starburst is a lens effect, in
+    // components/three/grade.ts, so the depth of field doesn't smear it).
+    graded += uGlow * (pow(toward, 12.0) * 0.25 + pow(toward, 80.0) * 0.8 + pow(toward, 600.0) * 2.5 + pow(toward, 6000.0) * 30.0);
     // Cloud edges near the sun catch fire.
     graded += uGlow * pow(toward, 4.0) * cloud * k * 0.6;
     // Down at the horizon, the warm haze.

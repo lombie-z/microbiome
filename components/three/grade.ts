@@ -14,6 +14,8 @@ uniform vec3 shadowTint;
 uniform vec3 highlightTint;
 uniform vec3 midTint;
 uniform float glow;
+uniform vec3 sunSpot;
+uniform float sunAspect;
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec3 c = max(inputColor.rgb, vec3(0.0));
@@ -42,6 +44,21 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float lv = dot(g, vec3(0.2126, 0.7152, 0.0722));
   float chroma = (max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b))) / max(lv, 1e-3);
   g = max(mix(vec3(lv), g, 1.0 + 0.6 * (1.0 - smoothstep(0.1, 0.8, chroma))), vec3(0.0));
+  // The sun's starburst, as a camera lens draws it: thin rays of uneven length round the sun's place on screen
+  // (sunSpot.xy in uv, sunSpot.z its visibility), past white so they glow.
+  if (sunSpot.z > 0.0) {
+    vec2 q = (uv - sunSpot.xy) * vec2(sunAspect, 1.0);
+    float r = length(q);
+    float ang = atan(q.y, q.x);
+    // Many soft rays of uneven length (a hash per ray), fading fast: a glow with a hint of spikes, not a star.
+    float n = 18.0;
+    float id = floor(ang / 6.28318 * n + 0.5);
+    float len = 0.015 + 0.05 * fract(sin(id * 91.3) * 437.5);
+    float rays = pow(abs(cos(ang * n * 0.5)), 10.0) * exp(-r / len);
+    g += vec3(1.0, 0.72, 0.42) * rays * 0.5 * sunSpot.z;
+    // And the hot, saturated glow round it.
+    g += vec3(1.0, 0.55, 0.25) * (exp(-r * 30.0) * 0.8 + exp(-r * 7.0) * 0.18) * sunSpot.z;
+  }
   outputColor = vec4(mix(c, g, weight), inputColor.a);
 }`;
 
@@ -58,12 +75,20 @@ export class GradeEffect extends Effect {
         ['midTint', new Uniform(new Vector3(1.09, 0.9, 0.97))],
         ['highlightTint', new Uniform(new Vector3(1.12, 0.88, 0.8))],
         ['glow', new Uniform(0.55)],
+        ['sunSpot', new Uniform(new Vector3())],
+        ['sunAspect', new Uniform(1)],
       ]),
     });
   }
 
   set weight(value: number) {
     (this.uniforms.get('weight') as Uniform<number>).value = value;
+  }
+
+  /** The sun on screen: x, y in uv and z its visibility (0 when behind the camera or the effect is off). */
+  setSun(x: number, y: number, visible: number, aspect: number) {
+    (this.uniforms.get('sunSpot') as Uniform<Vector3>).value.set(x, y, visible);
+    (this.uniforms.get('sunAspect') as Uniform<number>).value = aspect;
   }
 
   set glow(value: number) {

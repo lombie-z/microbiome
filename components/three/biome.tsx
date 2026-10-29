@@ -153,7 +153,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       } else if (name === 'Sun') {
         // Brighter than white so the bloom catches it; the light rays need it transparent and not writing depth.
         mesh.material = new MeshBasicMaterial({
-          color: new Color(1.0, 0.78, 0.5).multiplyScalar(9),
+          color: new Color(1.0, 0.86, 0.66).multiplyScalar(16),
           transparent: true,
           opacity: 0,
           depthWrite: false,
@@ -163,7 +163,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         // Raised a little from Blender's placement so it clears the hill on the landing's left.
         mesh.position.copy(SUN_POSITION);
         // A small, intense disc (as in the reference), not a wall of light.
-        mesh.scale.setScalar(0.22);
+        mesh.scale.setScalar(0.1);
         sun.current = mesh;
       }
     });
