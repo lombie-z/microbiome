@@ -21,7 +21,7 @@ const LakeShader = {
     textureMatrix: { value: null },
     uTime: { value: 0 },
     uSun: { value: new Vector3() },
-    uDeep: { value: new Color('#8a6c74') },
+    uDeep: { value: new Color('#6e5a4c') },
     uGlint: { value: new Color('#ffd9a0') },
   },
   vertexShader: /* glsl */ `
@@ -61,8 +61,10 @@ const LakeShader = {
       vec3 v = normalize(cameraPosition - vWorld);
       // The mirrored view, nudged by the ripples.
       vec4 uv = vUv;
-      uv.xy += n.xz * uv.w * 0.03;
-      vec3 reflection = texture2DProj(tDiffuse, uv).rgb;
+      // Gentle: the reference's lake is nearly glassy, its reflections only shivering.
+      uv.xy += n.xz * uv.w * 0.012;
+      // Reflections warm a touch, as water does under a low gold sun.
+      vec3 reflection = texture2DProj(tDiffuse, uv).rgb * vec3(1.06, 0.98, 0.86);
       // Fresnel: mostly reflection at the low angles we see the lake from, the water's own colour looking down.
       float fresnel = 0.25 + 0.75 * pow(1.0 - max(dot(v, n), 0.0), 3.0);
       vec3 col = mix(uDeep, reflection, fresnel);

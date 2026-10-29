@@ -1,4 +1,4 @@
-import { DoubleSide, type Material, MeshPhysicalMaterial, type MeshStandardMaterial } from 'three';
+import { Color, DoubleSide, type Material, MeshPhysicalMaterial, type MeshStandardMaterial } from 'three';
 import { waterTime } from './water';
 
 // Materials for the landing's foreground (art/build-landing.py): the colour lives in the meshes' vertex colours; these
@@ -19,11 +19,14 @@ float lNoise(vec3 p) {
 // The reed bed's foot (Blender's REED_BED, in three's x/z): the taller a blade, the further it sways.
 const REED_BED = '-23.1, 3.24';
 
-type Patch = { vertex?: string; colour?: string; light?: string };
+type Patch = { vertex?: string; colour?: string; normal?: string; light?: string };
 
 function physical(source: MeshStandardMaterial, settings: Partial<MeshPhysicalMaterial>, key: string, patch: Patch) {
-  const material = new MeshPhysicalMaterial({ vertexColors: true, color: source.color, ...settings });
+  // The studio environment (a white room, for the clay hero) would gloss everything here grey; the sun sheen and the
+  // lake stand in for the landing's reflections.
+  const material = new MeshPhysicalMaterial({ vertexColors: true, color: source.color, envMapIntensity: 0.15, ...settings });
   material.name = source.name;
+  material.userData.envMapIntensity = material.envMapIntensity;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = waterTime;
     const varyings = 'varying vec3 vLandingPos;\nuniform float uTime;';
@@ -34,11 +37,46 @@ function physical(source: MeshStandardMaterial, settings: Partial<MeshPhysicalMa
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${varyings}\n${NOISE}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${patch.colour ?? ''}`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${patch.normal ?? ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${patch.light ?? ''}`);
   };
   material.customProgramCacheKey = () => `landing-${key}`;
   return material;
 }
+
+/** Bumps the shading normal by a height field (screen-space derivatives, as three's bump map does). */
+const BUMP = (height: string, strength: number) => /* glsl */ `
+{
+  float h = (${height}) * ${strength.toFixed(4)};
+  vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
+  vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
+  float det = dot(dpdx, r1);
+  vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+  normal = normalize(abs(det) * normal - grad);
+}`;
+
+// The low sun's direction at the landing (components/three/sky.tsx SUN_POSITION, seen from the foreground).
+const SUN_DIR = 'normalize(vec3(0.7, 0.12, -0.7))';
+
+/** Wet glitter: tiny mirror flecks catching the low sun, past white so they bloom (and become bokeh in the blur). */
+const GLINTS = (scale: number, density: number, strength: number) => /* glsl */ `
+{
+  vec3 nW = normalize(cross(dFdx(vLandingPos), dFdy(vLandingPos)));
+  vec3 viewW = normalize(cameraPosition - vLandingPos);
+  if (dot(nW, viewW) < 0.0) nW = -nW;
+  float facing = pow(max(dot(reflect(-${SUN_DIR}, nW), viewW), 0.0), 6.0);
+  float fleck = smoothstep(${density.toFixed(3)}, 1.0, lNoise(vLandingPos * ${scale.toFixed(1)}));
+  totalEmissiveRadiance += vec3(1.0, 0.78, 0.45) * fleck * facing * ${strength.toFixed(2)};
+}`;
+
+/** The low sun's reflection off a wet or waxy surface: a broad warm sheen, past white where it's strongest. */
+const SUN_SHEEN = (power: number, strength: number) => /* glsl */ `
+{
+  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  vec3 viewW = normalize(cameraPosition - vLandingPos);
+  float sheen = pow(max(dot(reflect(-${SUN_DIR}, nW), viewW), 0.0), ${power.toFixed(1)});
+  totalEmissiveRadiance += vec3(1.0, 0.76, 0.42) * sheen * ${strength.toFixed(2)};
+}`;
 
 // Light coming through from behind (the sun is low and ahead of the camera): thin things glow at their edges.
 const BACKLIT = (strength: number) => /* glsl */ `
@@ -62,17 +100,31 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         light: BACKLIT(1.4),
       });
     case 'Pad':
-      // Waxy and wet, the low sun glowing through the thin leaf at its edges.
-      return physical(source, { roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.18 }, 'pad', {
-        colour: 'diffuseColor.rgb *= 0.85 + 0.3 * lNoise(vLandingPos * 18.0);',
-        light: BACKLIT(0.9),
+      // Waxy and wet: deep olive, a golden sheen where the low sun reflects off it, glowing through its thin edges.
+      return physical(source, { roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15 }, 'pad', {
+        colour: /* glsl */ `
+diffuseColor.rgb *= 0.8 + 0.3 * lNoise(vLandingPos * 18.0);
+diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 1.2);`,
+        normal: BUMP('lNoise(vLandingPos * 40.0)', 0.002),
+        // (No rim glow: the pads lie flat, seen edge-on, so all of them would count as rim.)
+        // The low sun shining through the leaf from behind lights it from within, gold-green.
+        light: SUN_SHEEN(14.0, 0.9) + 'totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.5, 0.25);',
       });
     case 'Frog':
-      // Wet skin: glossy, with fine bumps darkening and lightening the mottling.
+      // Wet skin: glossy, with fine bumps darkening and lightening the mottling, rimmed by the low sun behind it.
       return physical(source, { roughness: 0.28, clearcoat: 0.9, clearcoatRoughness: 0.2 }, 'frog', {
-        colour: 'diffuseColor.rgb *= 0.82 + 0.36 * lNoise(vLandingPos * 140.0);',
-        light: BACKLIT(0.5),
+        colour: 'diffuseColor.rgb *= (0.82 + 0.36 * lNoise(vLandingPos * 140.0)) * vec3(1.02, 0.98, 0.88);',
+        normal: BUMP('lNoise(vLandingPos * 160.0)', 0.0015),
+        light: `${SUN_SHEEN(24.0, 1.4)}${BACKLIT(1.4)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.17, 0.1);`,
       });
+    case 'Dew':
+      // Clear beads of water: you see the pad through them, and each holds a hot point of the sun.
+      return physical(
+        source,
+        { vertexColors: false, color: new Color(0xd8e6c8), roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.12, transparent: true, opacity: 0.4 },
+        'dew',
+        { light: SUN_SHEEN(40.0, 12.0) + BACKLIT(2.0) }
+      );
     case 'Mountains': {
       // A ring of ridges seen from inside it: both faces, matte, left to the fog to fade into layers.
       const material = source.clone();
@@ -87,21 +139,24 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
       return physical(source, { roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.12 }, 'eye', {});
     case 'Lily':
       // Petals are thin: they glow in the low light.
-      return physical(source, { roughness: 0.5, side: DoubleSide }, 'lily', { light: BACKLIT(0.8) });
+      return physical(source, { roughness: 0.5, side: DoubleSide }, 'lily', {
+        light: `${BACKLIT(0.8)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.45, 0.38, 0.36);`,
+      });
     case 'Pebble':
-      // Pale granite: dark and rusty specks, a wet sheen the sun sparkles in.
-      return physical(source, { roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.12 }, 'pebble', {
+      // Wet granite as the reference's: grey-brown, finely speckled, rough-grained, glittering where the sun catches it.
+      return physical(source, { roughness: 0.45, clearcoat: 0.8, clearcoatRoughness: 0.25 }, 'pebble', {
         colour: /* glsl */ `
 {
-  vec3 p = vLandingPos * 240.0;
-  float speck = smoothstep(0.72, 0.8, lNoise(p));
-  float rust = smoothstep(0.65, 0.8, lNoise(p * 0.45 + 13.0));
-  float pale = smoothstep(0.7, 0.85, lNoise(p * 1.7 + 5.0));
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.62, 0.4, 0.28), rust * 0.5);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.22, 0.17), speck * 0.6);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.97, 0.92), pale * 0.3);
-  diffuseColor.rgb *= 0.9 + 0.2 * lNoise(vLandingPos * 9.0);
+  vec3 p = vLandingPos * 260.0;
+  float speck = smoothstep(0.7, 0.8, lNoise(p));
+  float pale = smoothstep(0.72, 0.85, lNoise(p * 1.7 + 5.0));
+  float mottle = lNoise(vLandingPos * 14.0) * 0.6 + lNoise(vLandingPos * 40.0) * 0.4;
+  diffuseColor.rgb *= mix(0.62, 1.0, mottle);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.12, 0.1), speck * 0.7);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.86, 0.78), pale * 0.35);
 }`,
+        normal: BUMP('lNoise(vLandingPos * 90.0) * 0.6 + lNoise(vLandingPos * 260.0) * 0.4', 0.004),
+        light: GLINTS(140.0, 0.93, 14.0) + BACKLIT(1.1),
       });
     default:
       return null;

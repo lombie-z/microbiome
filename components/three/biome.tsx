@@ -11,7 +11,7 @@ import {
   type Material,
   type Mesh,
   MeshBasicMaterial,
-  MeshPhysicalMaterial,
+  type MeshPhysicalMaterial,
   type Object3D,
   ShaderMaterial,
   Vector3,
@@ -138,18 +138,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         // The lake is drawn by <Lake> (a reflector); the spray particles stand in for Blender's splash beads.
         mesh.visible = false;
       } else if (own.name === 'Canyon') mesh.material = rockMaterial(own);
-      else if (own.name === 'Dew') {
-        // Beads of water on the lily pads: clear and glossy, so the low sun glints in them.
-        mesh.material = new MeshPhysicalMaterial({
-          color: '#3d5a34',
-          roughness: 0.12,
-          clearcoat: 1,
-          clearcoatRoughness: 0.12,
-          transparent: true,
-          opacity: 0.55,
-          envMapIntensity: 2.5,
-        });
-      } else if (name.startsWith('Fall')) {
+      else if (name.startsWith('Fall')) {
         mesh.material = falling;
         mesh.renderOrder = 2;
       } else if (name.startsWith('SkyCloud')) {

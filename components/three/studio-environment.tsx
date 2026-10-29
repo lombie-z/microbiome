@@ -29,7 +29,8 @@ export function useStudioReflections(root: Object3D, intensity = 1) {
       const material = (child as Object3D & { material?: Material & { envMap?: Texture | null; envMapIntensity?: number } }).material;
       if (material && 'envMapIntensity' in material) {
         material.envMap = envMap;
-        material.envMapIntensity = intensity;
+        // A material can ask for its own strength (the landing's, which mostly don't want the white room).
+        material.envMapIntensity = material.userData.envMapIntensity ?? intensity;
         material.needsUpdate = true;
       }
     });

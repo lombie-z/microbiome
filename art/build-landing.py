@@ -576,26 +576,38 @@ for hx, head_top, head_bottom in ((1462, 105, 195), (1425, 210, 300), (1420, 318
     colour_faces(bm, geom['verts'], col, lambda co, b=base: mix(CATTAIL, CATTAIL_LIT, smoothstep(-0.2, 0.6, noise.noise(co * 60)) * 0.6))
 finish('Landing.Reeds', bm, material('Reed', 0.45))
 
-# Pebbles: pale, speckled and wet, heaped in the bottom right (out of focus, close to the camera) and one or two by
-# the reeds.
-STONE = Color((0.86, 0.76, 0.66))
-STONE_WARM = Color((0.78, 0.6, 0.48))
+# Pebbles: wet grey-brown granite (speckled and glittering on the site), heaped in the bottom right (out of focus,
+# close to the camera) and climbing to the reeds, a couple by the pads. Irregular river stones, not eggs.
+STONE = Color((0.6, 0.52, 0.45))
+STONE_WARM = Color((0.66, 0.5, 0.4))
+STONE_GREY = Color((0.5, 0.48, 0.46))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
-for px, py, half in ((1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95), (1405, 905, 90), (1525, 880, 60),
-                     (930, 1015, 95), (1355, 1015, 105), (1180, 885, 55), (1050, 905, 42), (1530, 985, 75), (1280, 880, 40)):
+PEBBLES = [(1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95), (1405, 905, 90), (1525, 880, 60),
+           (930, 1015, 95), (1355, 1015, 105), (1180, 885, 55), (1050, 905, 42), (1530, 985, 75), (1280, 880, 40),
+           # The heap behind and between, smaller stones climbing toward the reeds.
+           (1340, 820, 38), (1440, 830, 45), (1230, 820, 30), (1500, 740, 50), (1400, 770, 35), (1120, 845, 32),
+           (990, 960, 50), (1460, 960, 55), (1160, 960, 45), (1300, 940, 45), (860, 1000, 60), (1420, 1000, 60)]
+for px, py, half in PEBBLES:
     contact = at(px, py)
     r = px_size(contact, half)
-    centre = contact + Vector((0, 0, r * 0.25))
+    # Stones further back in the heap rest higher, on the ones in front.
+    lift = r * 0.25 + (0.04 if py < 900 and px > 1100 else 0.0)
+    centre = contact + Vector((0, 0, lift))
     tone = rnd.uniform(0, 1)
+    base = mix(mix(STONE, STONE_WARM, tone), STONE_GREY, rnd.uniform(0, 0.6))
     geom = bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=1)
-    squash = rnd.uniform(0.55, 0.75)
+    sx, sy, sz = rnd.uniform(0.85, 1.2), rnd.uniform(0.7, 1.0), rnd.uniform(0.5, 0.75)
+    spin = rnd.uniform(0, 6.28)
+    seed = Vector((rnd.uniform(0, 50), rnd.uniform(0, 50), rnd.uniform(0, 50)))
     for v in geom['verts']:
-        v.co = Vector((v.co.x * r * rnd.uniform(1.0, 1.0), v.co.y * r * 0.85, v.co.z * r * squash))
-        v.co += v.co.normalized() * noise.noise(v.co * 4 / r + centre) * r * 0.06
-        v.co += centre
-    colour_faces(bm, geom['verts'], col, lambda co, t=tone: mix(STONE, STONE_WARM, t * 0.6))
-finish('Landing.Pebbles', bm, material('Pebble', 0.35))
+        n = v.co.copy()
+        # Lumpy and a little faceted: low-frequency bulges and flattened facets, a flatter underside.
+        bulge = noise.noise(n * 1.3 + seed) * 0.16 + noise.noise(n * 3.1 + seed) * 0.05
+        local = Vector((n.x * sx, n.y * sy, n.z * sz * (0.6 if n.z < 0 else 1.0))) * (1 + bulge)
+        v.co = rotate_z(local * r, spin) + centre
+    colour_faces(bm, geom['verts'], col, lambda co, c=base: c)
+finish('Landing.Pebbles', bm, material('Pebble', 0.45))
 
 # Dew: beads on the pads, a few big ones as in the reference, glinting in the low sun ('Dew' on the site).
 bm = bmesh.new()
