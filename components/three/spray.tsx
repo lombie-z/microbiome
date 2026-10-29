@@ -235,8 +235,9 @@ export function Spray({ scene }: { scene: Object3D }) {
         opacity: 0.1,
         softness: 1,
         emit: (_, start, velocity) => {
-          // Spray off the lip where the water goes over, along its width.
-          start.set(LIP.x - Math.random() * 0.3, LIP.y - Math.random() * 0.6, (Math.random() * 2 - 1) * 2.0);
+          // Spray off the falling water, along its width: not at the lip itself, but once the water's had a drop to
+          // break up (it fades in over each puff's life, so lower still).
+          start.set(LIP.x - 0.1 - Math.random() * 0.3, LIP.y - 1.0 - Math.random() * 0.8, (Math.random() * 2 - 1) * 2.0);
           velocity.set(-0.08 - Math.random() * 0.08, -0.12, (Math.random() - 0.5) * 0.06);
           return { life: 5 + Math.random() * 3, size: 0.6 + Math.random() * 0.6 };
         },

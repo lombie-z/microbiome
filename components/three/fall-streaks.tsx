@@ -32,6 +32,7 @@ const FLOW_Y = LIP_TOP + 0.08; // the water running across the ledge's top to th
 const START_Y = FLOW_Y - ROLL; // where the free fall begins, at the foot of the roll
 const BOTTOM = -11.05; // the pool
 const RZ = 3.75; // the curtain's half-width across the landing's view (three z)
+const AERATE = 2.2; // how far the water falls (m) before it's fully white
 
 // At the landing the curtain splits as the reference's does: a broad main fall, a gap with a few threads, and a thin
 // fall to its right. t runs across the curtain from its left edge (as the landing sees it) to its right.
@@ -78,6 +79,11 @@ void main() {
   vQuad = position.xy * 2.0;
   // In over the lip, out into the splash; shaped as the reference's fall (a main column, a gap, a thin fall).
   vAlpha = smoothstep(0.0, 0.12, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * profile(aLane);
+  // Glassy going over the lip, white once it's fallen a way and broken up: the broad, soft streaks (the curtain's
+  // white haze) come in over the first couple of metres, the fine ones thicken. (Less so at the landing, seen whole.)
+  float aerate = smoothstep(0.0, ${AERATE.toFixed(1)}, fallen);
+  float clear = aWidth > 0.08 ? aerate : mix(0.55, 1.0, aerate);
+  vAlpha *= mix(clear, 1.0, 0.5 * uLanding);
   vShade = aShade;
 }`;
 
@@ -141,6 +147,9 @@ void main() {
   // See-through in the gaps between ropes (the rock shows dark behind), solid in the ropes and foam.
   // (On the ledge's top the water fades in from the back, running toward the lip.)
   float a = uIn * mix(1.0, smoothstep(1.0, 0.55, vUv.y), uFlow) * mix(0.7, 1.0, uLanding) * edge * mix(0.45, 1.0, body) * smoothstep(0.0, 0.04, vUv.y) * smoothstep(0.1, 0.5, profile(q.x));
+  // Glassy over the lip, white once it's fallen a way (the ledge-top flow is left as it is).
+  float aerate = mix(smoothstep(0.0, ${AERATE.toFixed(1)}, (1.0 - vUv.y) * ${(START_Y - BOTTOM).toFixed(3)}), 1.0, uFlow);
+  a *= mix(mix(0.35, 1.0, aerate), 1.0, 0.5 * uLanding);
   vec3 c = vec3(1.35, 1.24, 1.08) * mix(0.45, 1.15, body) * mix(1.0, 0.86, vUv.x);
   c += vec3(0.35, 0.3, 0.25) * clumps;
   // The low sun from the left: the main column's sunward edge glows gold, and light comes through where it's thin.
