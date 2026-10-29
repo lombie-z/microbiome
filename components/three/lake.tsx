@@ -21,7 +21,7 @@ const LakeShader = {
     textureMatrix: { value: null },
     uTime: { value: 0 },
     uSun: { value: new Vector3() },
-    uDeep: { value: new Color('#6e5a4c') },
+    uDeep: { value: new Color('#a28a84') },
     uGlint: { value: new Color('#ffd9a0') },
   },
   vertexShader: /* glsl */ `
@@ -49,7 +49,9 @@ const LakeShader = {
     }
     // Small wind ripples: two drifting noise layers give the surface a gently moving normal.
     float ripples(vec2 p) {
-      return vnoise(p * 2.2 + uTime * 0.35) + 0.5 * vnoise(p * 5.3 - uTime * 0.6);
+      // Long, low swells lying across the view (the camera looks along x): they break the reflections into the
+      // reference's horizontal bands of light.
+      return vnoise(p * vec2(4.5, 0.9) + uTime * vec2(0.5, 0.1)) + 0.5 * vnoise(p * vec2(11.0, 2.5) - uTime * vec2(0.8, 0.2));
     }
     vec3 rippleNormal(vec2 p) {
       float e = 0.05;
@@ -62,11 +64,11 @@ const LakeShader = {
       // The mirrored view, nudged by the ripples.
       vec4 uv = vUv;
       // Gentle: the reference's lake is nearly glassy, its reflections only shivering.
-      uv.xy += n.xz * uv.w * 0.012;
-      // Reflections warm a touch, as water does under a low gold sun.
-      vec3 reflection = texture2DProj(tDiffuse, uv).rgb * vec3(1.06, 0.98, 0.86);
+      uv.xy += n.xz * uv.w * 0.02;
+      // Reflections a touch brighter than what they mirror, the water clear (as the reference's silver-gold lake).
+      vec3 reflection = texture2DProj(tDiffuse, uv).rgb * vec3(1.1, 1.03, 0.98);
       // Fresnel: mostly reflection at the low angles we see the lake from, the water's own colour looking down.
-      float fresnel = 0.25 + 0.75 * pow(1.0 - max(dot(v, n), 0.0), 3.0);
+      float fresnel = 0.12 + 0.88 * pow(1.0 - max(dot(v, n), 0.0), 3.0);
       vec3 col = mix(uDeep, reflection, fresnel);
       // Sun sparkles: a tight highlight on the ripples, broken up so it glitters, bright enough for the bloom.
       vec3 l = normalize(uSun - vWorld);
