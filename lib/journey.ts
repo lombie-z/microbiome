@@ -55,8 +55,7 @@ export const RAINBOW_LAYER = 2;
 export const landingAt = (frame: number) => smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], frame);
 
 /**
- * The descent is real from where the water leaves the planter: the planter (the clay toy) is left behind once it's well
- * above, and from then the streams come out of the sky.
+ * The pull-back: the planter (the clay toy) recedes into the haze above as the camera draws back across the lake, and
+ * its streams come to pour out of the sky. 1 while it's there, 0 once it's gone.
  */
-export const toyVisible = (frame: number) => frame < 320;
-export const streamsFromSky = (frame: number) => smoothstep(300, 330, frame);
+export const toyPresence = (frame: number) => 1 - smoothstep(380, 560, frame);

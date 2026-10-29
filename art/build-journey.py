@@ -3,15 +3,12 @@ Re-runnable; it replaces the keys. Shape it by moving the SHOTS below (or nudge 
 Run inside Blender with art/micro-biome.blend open:  exec(open('<repo>/art/build-journey.py').read())
 
 The path is a few composed shots joined by one smooth curve (Catmull-Rom through the eye points and, separately,
-through the look-at points), so the camera never lurches. After the opening it falls with the falls: right up
-against the water, at its pace, looking up at it and down along it (the site hides what's far below in fog).
+through the look-at points), so the camera never lurches. One crane move:
   0-80     Open up: from the blog's near-orthographic hero, a dolly zoom (lens widens as the camera closes in, so the
            biome holds its size).
-  80-215   Tuck in beside fall A under the lip, looking up at the planter; tip over and fall with it, looking down.
-  215-265  Past the cloud layer; below it the sun is out.
-  265-460  Spiral down with the streams as they braid, then look up at the braid winding overhead into the light.
-  460-760  Keep looking up while drifting down and away from the fall, levelling out at the water: the landing, eye
-           level on the lake (art/build-landing.py), the frog close, the fall and pink cliffs beyond.
+  80-300   Drop just below the planter's lip beside the falls and tilt up: the water pours down from the floating toy.
+  300-760  Pull straight back and down across the lake, levelling out at the landing, eye level on the water (the
+           planter recedes into the haze above).
   760-920  Hold on the landing (the shot matched to art/reference/landing-pov) while the product UI comes in.
 """
 import math
@@ -31,16 +28,14 @@ OPEN_TARGET = Vector((0, 0, 0.45))
 # (frame, eye, look-at, vertical FOV) for each composed shot after the opening beat. Pool surface is at z -11; the
 # main falls leave the planter at A (0.17, -0.5), B (-0.5, 0.14), C (0.5, -0.24) and braid from z -2.1 to -7.
 SHOTS = [
-    (150, Vector((0.45, -0.95, -0.35)), Vector((0.17, -0.55, 0.75)), 50.0),  # tucked beside fall A, looking up at the lip
-    (215, Vector((0.42, -1.0, -0.9)), Vector((0.15, -0.75, -3.0)), 50.0),  # falling with it, looking down along it
-    (265, Vector((0.45, -1.4, -1.65)), Vector((0.15, -0.7, -3.4)), 48.0),  # through the cloud layer
-    (340, Vector((0.69, -1.31, -3.0)), Vector((0.0, 0.0, -5.5)), 48.0),  # beside the gathering streams, looking down the braid
-    (400, Vector((0.95, 0.74, -4.6)), Vector((0.0, 0.0, -6.5)), 50.0),  # spiralling round with the twist
-    (460, Vector((-0.37, 0.65, -6.4)), Vector((0.0, 0.0, -3.5)), 55.0),  # looking up the braid winding overhead into the light
-    # Still looking up, drifting down and away from the fall, levelling out to eye height as it reaches the water.
-    (530, Vector((-1.6, 0.7, -8.0)), Vector((0.0, 0.0, -5.6)), 52.0),
-    (610, Vector((-6.0, 0.4, -9.4)), Vector((0.0, 0.0, -6.8)), 48.0),
-    (690, Vector((-15.0, -1.2, -10.2)), Vector((0.0, -0.6, -8.0)), 42.0),
+    # Drop just below the planter's lip beside the falls and tilt up: the water pours down at you from the floating
+    # toy, against the sky.
+    (200, Vector((-2.5, -1.4, -1.5)), Vector((0.0, 0.0, 0.4)), 46.0),
+    (300, Vector((-3.2, -1.2, -2.6)), Vector((0.0, 0.2, 0.0)), 46.0),
+    # Then pull straight back and down across the lake, levelling out into the landing (the planter recedes into the
+    # haze above).
+    (460, Vector((-9.0, -1.6, -6.4)), Vector((0.0, 1.2, -2.6)), 42.0),
+    (620, Vector((-19.0, -2.2, -9.7)), Vector((0.0, 2.6, -7.0)), 39.0),
     # The landing (art/build-landing.py): eye level on the lake, the frog close, the fall and cliffs beyond.
     (760, Vector((-27.0, -2.5, -10.55)), Vector((0.0, 3.4, -9.2)), 38.0),  # the fall right of centre, as the reference
     # Then hold on it (a barely-there drift, so it stays alive) while the product UI comes in over it.

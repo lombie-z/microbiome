@@ -1,3 +1,4 @@
+import { IntroCaption } from '@/components/intro-caption';
 import { Journey } from '@/components/journey';
 
 export default function Home() {
@@ -5,13 +6,9 @@ export default function Home() {
     <main>
       <h1 className="sr-only">Microbiome</h1>
       <Journey />
+      <IntroCaption />
       {/* The scroll track the camera journey runs along. */}
-      <div className="relative z-10 h-[2040svh]">
-        <section className="pointer-events-none flex h-svh flex-col items-center justify-end pb-8 text-center" aria-label="Intro">
-          <p className="text-xs uppercase tracking-[0.18em] text-muted">Claude-powered Modelling for Interactive Web Experiences</p>
-          <p className="mt-2 text-xs">Scroll to go in</p>
-        </section>
-      </div>
+      <div className="relative z-10 h-[560svh]" />
     </main>
   );
 }

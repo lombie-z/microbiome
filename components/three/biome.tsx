@@ -8,6 +8,7 @@ import {
   type DirectionalLight,
   DoubleSide,
   type HemisphereLight,
+  type Material,
   type Mesh,
   MeshBasicMaterial,
   type MeshPhysicalMaterial,
@@ -15,7 +16,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep, streamsFromSky, toyVisible } from '@/lib/journey';
+import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep, toyPresence } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -167,6 +168,19 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     const root = scene.getObjectByName('MicroBiome') ?? scene;
     return root.children.filter((o) => !isSkyPart(o.name));
   }, [scene]);
+  // Its materials fade (dithered, so nothing needs sorting; fully opaque at 1, so the hero is untouched).
+  const toyMaterials = useMemo(() => {
+    const set = new Set<Material>();
+    for (const o of toy)
+      o.traverse((c) => {
+        const m = (c as Mesh).material;
+        for (const material of Array.isArray(m) ? m : m ? [m] : []) {
+          material.alphaHash = true;
+          set.add(material);
+        }
+      });
+    return [...set];
+  }, [toy]);
   const below = useMemo(() => {
     const list: Object3D[] = [];
     scene.traverse((o) => {
@@ -254,9 +268,11 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     waterLanding.value = landing;
     if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
-    const showToy = toyVisible(journey.frame);
-    for (const o of toy) o.visible = showToy;
-    waterFromSky.value = streamsFromSky(journey.frame);
+    // The planter recedes into the haze above on the pull-back; its streams then pour out of the sky.
+    const presence = toyPresence(journey.frame);
+    for (const m of toyMaterials) m.opacity = presence;
+    for (const o of toy) o.visible = presence > 0.001;
+    waterFromSky.value = 1 - presence;
     for (const a of animated) {
       const { node, base, i } = a;
       switch (a.kind) {
