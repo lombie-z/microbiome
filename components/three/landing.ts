@@ -166,6 +166,24 @@ totalEmissiveRadiance += diffuseColor.rgb * vec3(0.7, 0.58, 0.22);
       const material = source.clone();
       material.side = DoubleSide;
       material.roughness = 1;
+      // Aerial perspective: the farther ranges (and every range's foot) sink into the warm haze, so they stack in
+      // paling layers rather than standing as flat cut-outs.
+      material.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying vec3 vMtnPos;')
+          .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvMtnPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vMtnPos;').replace(
+          '#include <dithering_fragment>',
+          `{
+  float far = smoothstep(45.0, 115.0, length(vMtnPos.xz));
+  float low = 1.0 - smoothstep(-11.0, 6.0, vMtnPos.y);
+  float haze = clamp(0.35 + 0.45 * far + 0.3 * low, 0.0, 0.9);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0, 0.8, 0.66), haze);
+}
+#include <dithering_fragment>`
+        );
+      };
+      material.customProgramCacheKey = () => 'landing-mountains';
       return material;
     }
     case 'Shrubs':

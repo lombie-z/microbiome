@@ -111,7 +111,7 @@ void main() {
   float edge = 1.0 - smoothstep(0.5, 0.6, body);
   cloud += uGlow * (pow(toward, 4.0) * 0.35 + pow(toward, 16.0) * 1.0) * (0.3 + lit + edge * 1.5);
   sky = mix(sky, cloud, c * smoothstep(0.0, 0.1, d.y));
-  // At the landing, a photographed sky (Poly Haven's citrus_orchard_road_puresky, CC0) takes over: real heaped cumulus
+  // At the landing, a photographed sky (Poly Haven's evening_road_01_puresky, CC0) takes over: real heaped cumulus
   // where noise can only approximate them. It's turned so its low sun sits behind ours, and regraded from its blue
   // evening into the reference's palette: lavender gaps, rose-mauve cloud bodies, peach and gold where they're lit.
   // (Turned so the field of cumulus its low sun lights up fills the view toward ours.)
@@ -119,7 +119,7 @@ void main() {
     float u = atan(d.z, d.x) / 6.28318 + 0.5;
     float uSunAz = atan(uSun.z, uSun.x) / 6.28318 + 0.5;
     float elev = asin(clamp(d.y, 0.0, 1.0)) / 1.5708;
-    vec3 photo = texture2D(uPhotoSky, vec2(fract(u - uSunAz + 0.5), max(elev, 0.003))).rgb;
+    vec3 photo = texture2D(uPhotoSky, vec2(fract(u - uSunAz + 0.0), max(elev, 0.003))).rgb;
     // (Its brightness as seen, not linear, so the grade's thresholds sit where the eye puts them.)
     float l = pow(dot(photo, vec3(0.2126, 0.7152, 0.0722)), 1.0 / 2.2);
     // Clear sky is blue in the photo, cloud is grey to white: tell them apart by colour, not brightness.
@@ -127,7 +127,7 @@ void main() {
     float blueness = (photo.b - 0.5 * (photo.r + photo.g)) / lin;
     float cloud = 1.0 - smoothstep(0.12, 0.45, blueness);
     float k = smoothstep(0.4, 0.92, l);
-    vec3 gap = mix(vec3(0.72, 0.58, 0.8), vec3(0.98, 0.74, 0.76), smoothstep(0.0, 0.25, 0.3 - d.y)) * (0.62 + 0.3 * l);
+    vec3 gap = mix(vec3(0.84, 0.7, 0.86), vec3(1.0, 0.8, 0.74), smoothstep(0.0, 0.25, 0.3 - d.y)) * (0.72 + 0.3 * l);
     vec3 body = mix(vec3(0.7, 0.45, 0.52), vec3(1.3, 0.86, 0.62), k) * (0.6 + 0.8 * k);
     // Toward the sun everything warms to peach and orange: the clouds blaze, the gaps go gold.
     float near = pow(toward, 3.0);
