@@ -23,6 +23,8 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const PLASTER = new Color('#f5f2ed');
 const SKY_TOP = new Color('#c9a9c2');
 const SKY_HORIZON = new Color('#ffd49c');
+// The photographed sky's colour on the way down, sampled from the render.
+const DESCENT_HAZE = new Color('#dfc6d4');
 const SUN_GLOW = new Color('#ffad5c');
 const CLOUD_LIT = new Color('#ffc4a4');
 const CLOUD_SHADE = new Color('#c48fa3');
@@ -216,12 +218,18 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     // the pool. Its colour is the sky's horizon, so things melt into the background.
     // Three states: none for the hero; close among the falls (it hides what's far below when looking down); a warm
     // aerial haze over the lake, so the cliffs and mountains fade with distance.
-    const among = smoothstep(BEATS.open, BEATS.fogIn, f);
+    // (Closed tight before the world below is drawn, lib/journey.ts belowVisible, so it never flashes in.)
+    const among = smoothstep(BEATS.open, BEATS.open + 10, f);
+    // The world below is in the scene from the start of the drop but wholly in haze; the haze then thins over about a
+    // screen of scroll, so the cliffs emerge from it rather than switching on.
+    const emerge = smoothstep(BEATS.fogIn, 280, f);
     // (Easing out slowly, so the cliffs and lake emerge through it rather than appearing.)
     const lake = smoothstep(BEATS.fogOut[0] - 140, BEATS.fogOut[1], f) ** 0.6;
-    fog.near = lerp(lerp(1000, 3, among), 18, lake);
-    fog.far = lerp(lerp(2000, 45, among), 170, lake);
-    fog.color.copy(PLASTER).lerp(SKY_HORIZON, bloom);
+    fog.near = lerp(lerp(1000, lerp(5, 3, emerge), among), 18, lake);
+    fog.far = lerp(lerp(2000, lerp(6, 45, emerge * emerge), among), 170, lake);
+    // The haze matches the photographed sky behind it on the way down (so the cliffs emerge from the sky itself), then
+    // warms to the landing's horizon.
+    fog.color.copy(PLASTER).lerp(DESCENT_HAZE, bloom).lerp(SKY_HORIZON, lake);
 
     // Low, warm, behind the scene at the landing: it rims the reeds, the frog and the spray.
     if (light.current) {

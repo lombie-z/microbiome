@@ -45,9 +45,9 @@ export const isLightDevice = () => typeof window !== 'undefined' && (window.matc
 /** 0 until the camera nears the lake, 1 at the landing: the landing's own light, haze and grade blend in on this. */
 /**
  * Whether the world below (the canyon, lake and their dressing) is drawn: not for the hero, which sits on the blog's
- * plain plaster, until the fog closes in among the falls.
+ * plain plaster, until the fog has closed in (just after the opening): it then emerges as the haze thins.
  */
-export const belowVisible = (frame: number) => frame > BEATS.fogIn;
+export const belowVisible = (frame: number) => frame > BEATS.open + 12;
 
 /** The render layer the rainbow lives on: the camera draws it, the lake's mirror doesn't. */
 export const RAINBOW_LAYER = 2;
