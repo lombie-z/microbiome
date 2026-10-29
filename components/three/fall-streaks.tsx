@@ -40,6 +40,8 @@ const RZ = 3.75; // the curtain's half-width across the landing's view (three z)
 // How far the water falls (m) before it starts to go white, and before it's fully white.
 const AERATE_FROM = 0.9;
 const AERATE = 4.5;
+// Where the strands fade in, metres below the lip.
+const STRANDS_FROM = [0.35, 1.4];
 
 // At the landing the curtain splits as the reference's does: a broad main fall, a gap with a few threads, and a thin
 // fall to its right. t runs across the curtain from its left edge (as the landing sees it) to its right.
@@ -87,7 +89,8 @@ void main() {
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   vQuad = position.xy * 2.0;
   // In over the lip, out into the splash; shaped as the reference's fall (a main column, a gap, a thin fall).
-  vAlpha = smoothstep(0.0, 0.12, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * profile(aLane);
+  // (The strands come in a way below the lip, the glassy sheet carrying the water over it.)
+  vAlpha = smoothstep(${STRANDS_FROM[0].toFixed(2)}, ${STRANDS_FROM[1].toFixed(2)}, fallen) * (1.0 - smoothstep(drop - 0.5, drop, fallen)) * profile(aLane);
   // Glassy going over the lip, white once it's fallen a way and broken up: the broad, soft streaks (the curtain's
   // white haze) come in after the first metre's drop, the fine ones thicken. (Less so at the landing, seen whole.)
   float aerate = smoothstep(${AERATE_FROM.toFixed(1)}, ${AERATE.toFixed(1)}, fallen);
