@@ -121,10 +121,17 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         colour: /* glsl */ `
 diffuseColor.rgb *= 0.8 + 0.3 * lNoise(vLandingPos * 18.0);
 diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 1.2);`,
-        normal: BUMP('lNoise(vLandingPos * 40.0)', 0.002),
+        // Radial veins as ridges (the veins are lighter in the vertex colour), and a little waxy unevenness.
+        normal: BUMP('dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)) * 2.0 + lNoise(vLandingPos * 40.0) * 0.3', 0.004),
         // (No rim glow: the pads lie flat, seen edge-on, so all of them would count as rim.)
-        // The low sun shining through the leaf from behind lights it from within, gold-green.
-        light: SUN_SHEEN(14.0, 0.9) + 'totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.5, 0.25);',
+        // The low sun shining through the leaf from behind lights it from within, gold-green; and the wet surface
+        // glitters, a scatter of tiny points of sun.
+        light: `${SUN_SHEEN(14.0, 0.9)}${SUN_SHEEN(4.0, 0.35)}
+totalEmissiveRadiance += diffuseColor.rgb * vec3(0.7, 0.58, 0.22);
+{
+  float fleck = smoothstep(0.86, 0.97, lNoise(vLandingPos * 140.0)) * smoothstep(0.3, 0.7, lNoise(vLandingPos * 9.0 + 4.0));
+  totalEmissiveRadiance += vec3(1.0, 0.8, 0.5) * fleck * 5.0;
+}`,
       });
     case 'Frog':
       // Wet, warty skin: glossy, bumpy at two scales, rimmed by the low sun behind it, and the sun warming its back and
@@ -145,7 +152,14 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
         source,
         { vertexColors: false, color: new Color(0xd8e6c8), roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.12, transparent: true, opacity: 0.4 },
         'dew',
-        { light: SUN_SHEEN(40.0, 12.0) + BACKLIT(2.0) }
+        {
+          // Each bead holds a hot point of sun near its crown and a bright rim.
+          light: `${SUN_SHEEN(40.0, 12.0)}${BACKLIT(2.0)}
+{
+  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  totalEmissiveRadiance += vec3(1.0, 0.85, 0.6) * smoothstep(0.75, 0.95, nW.y + 0.3 * nW.z) * 6.0;
+}`,
+        }
       );
     case 'Mountains': {
       // A ring of ridges seen from inside it: both faces, matte, left to the fog to fade into layers.
