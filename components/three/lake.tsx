@@ -76,7 +76,9 @@ const LakeShader = {
       // The sun's path across the water: a broad band of glitter toward it, as the reference's sparkling lake.
       float path = pow(max(dot(reflect(-l, vec3(0.0, 1.0, 0.0)), v), 0.0), 30.0);
       float fine = step(0.8, vnoise(vWorld.xz * vec2(9.0, 26.0) + uTime * vec2(0.8, 1.7)));
-      col += uGlint * path * fine * 1.8;
+      // Calm close to the camera, glittering further out toward the sun.
+      float out_ = smoothstep(6.0, 22.0, length(vWorld.xz - cameraPosition.xz));
+      col += uGlint * path * fine * 1.8 * out_;
       gl_FragColor = vec4(col, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>

@@ -58,22 +58,22 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
       grade.current.setSun(sunOnScreen.x * 0.5 + 0.5, sunOnScreen.y * 0.5 + 0.5, facing * arrived, state.size.width / state.size.height);
     }
     // Gentler rays at the landing: full strength they wash the sky's clouds out round the sun.
-    // The landing's lens: focused on the frog, the far valley, mountains and cliffs going soft (the reference's depth
-    // of field). Off everywhere else, and clearing as the camera rises away.
-    if (focus.current) focus.current.bokehScale = 1.25 * landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
+    // The landing's lens: sharp from the frog out past the lilies (the focus is centred mid-way, its range wide, since
+    // the blur is symmetric about it), the far valley, mountains and cliffs going soft (the reference's depth of field). Off everywhere else, and clearing as the camera rises away.
+    if (focus.current) focus.current.bokehScale = 1.8 * landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
     // A livelier bloom at the landing: more of the bright scene glows (glints, lit rims, the fall, the mist).
     if (bloomFx.current) {
       bloomFx.current.luminanceMaterial.threshold = 1.1 - 0.2 * arrived;
       bloomFx.current.intensity = 0.55 + 0.25 * arrived;
     }
-    if (rays.current) rays.current.godRaysMaterial.weight = 0.6 * (1 - 0.55 * landingAt(journey.frame));
+    if (rays.current) rays.current.godRaysMaterial.weight = 0.6 * (1 - 0.85 * landingAt(journey.frame));
     // The shallow focus is the landing's still shot; it clears as the camera rises away (from frame 800).
     if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
   });
 
   return (
     <EffectComposer multisampling={multisampling} autoClear={false}>
-      <DepthOfField ref={focus} focusDistance={3.1} focusRange={6} bokehScale={0} />
+      <DepthOfField ref={focus} focusDistance={7} focusRange={24} bokehScale={0} />
       <NearBlur ref={nearBlur} />
       <Bloom ref={bloomFx} mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
       {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (

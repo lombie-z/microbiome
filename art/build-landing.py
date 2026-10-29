@@ -396,10 +396,11 @@ PETAL_TIP = Color((0.97, 0.66, 0.78))
 HEART = Color((1.0, 0.78, 0.25))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
-for px, py, half in ((85, 690, 70), (365, 637, 22), (462, 641, 20), (528, 637, 16), (700, 645, 14)):
+for px, py, half in ((88, 700, 78), (365, 637, 24), (462, 641, 22), (528, 637, 18), (700, 645, 15)):
     centre = at(px, py) + Vector((0, 0, 0.02))
     size = px_size(centre, half)
-    for ring, (count, length, tilt) in enumerate(((10, 1.0, 0.35), (9, 0.85, 0.8), (7, 0.65, 1.2))):
+    # Three rings of petals, the outer spreading, the inner standing up into a cup round the heart.
+    for ring, (count, length, tilt) in enumerate(((11, 1.0, 0.3), (10, 0.9, 0.75), (8, 0.75, 1.15), (6, 0.55, 1.4))):
         for k in range(count):
             a = 2 * math.pi * (k + 0.5 * ring) / count + rnd.uniform(-0.1, 0.1)
             L = length * size * rnd.uniform(0.9, 1.05)

@@ -156,7 +156,7 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
     case 'Lily':
       // Petals are thin: they glow in the low light.
       return physical(source, { roughness: 0.5, side: DoubleSide }, 'lily', {
-        light: `${BACKLIT(0.8)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.45, 0.38, 0.36);`,
+        light: `${BACKLIT(0.8)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.7, 0.6, 0.55);`,
       });
     case 'Pebble': {
       // Wet granite: Poly Haven's scanned rock_boulder_dry, projected from three sides (the stones have no UVs) and
