@@ -23,14 +23,16 @@ const WATER_Y = -11;
 // screen each frame (CSS px: top-left, top-right, bottom-right, bottom-left); BUTTONS_BOX is the buttons' box in CSS
 // px, the same proportions.
 export const BUTTONS_BOX = { width: 220, height: 200 };
-const BOX_LEFT = -0.8; // 0.1 m in from the left post's edge (-0.9), as the top sits 0.1 m under the panel
-const BOX_TOP = 2.2;
+const BOX_LEFT = -0.8; // 0.1 m in from the left post's edge (-0.9)
+const BOX_TOP = 2.16; // 0.14 m under the panel's foot
 const BOX_W = 0.95;
 const BOX_H = (BOX_W * BUTTONS_BOX.height) / BUTTONS_BOX.width;
+// Tilted up on the right a touch, in line with the panel's bottom edge as it reads on screen.
+const BOX_LIFT = 0.025;
 const STRIP_CORNERS = [
   new Vector3(BOX_LEFT, BOX_TOP, 0.06),
-  new Vector3(BOX_LEFT + BOX_W, BOX_TOP, 0.06),
-  new Vector3(BOX_LEFT + BOX_W, BOX_TOP - BOX_H, 0.06),
+  new Vector3(BOX_LEFT + BOX_W, BOX_TOP + BOX_LIFT, 0.06),
+  new Vector3(BOX_LEFT + BOX_W, BOX_TOP + BOX_LIFT - BOX_H, 0.06),
   new Vector3(BOX_LEFT, BOX_TOP - BOX_H, 0.06),
 ];
 export const signQuad = {
