@@ -217,7 +217,8 @@ export function Sky({ sun }: { sun: Mesh | null }) {
     // Three states: none for the hero; close among the falls (it hides what's far below when looking down); a warm
     // aerial haze over the lake, so the cliffs and mountains fade with distance. It thins for the final pull-back.
     const among = smoothstep(BEATS.open, BEATS.fogIn, f);
-    const lake = smoothstep(BEATS.fogOut[0], BEATS.fogOut[1], f);
+    // (Easing out slowly, so the cliffs and lake emerge through it rather than appearing.)
+    const lake = smoothstep(BEATS.fogOut[0] - 140, BEATS.fogOut[1], f) ** 0.6;
     const away = smoothstep(820, 900, f);
     fog.near = lerp(lerp(1000, 0.8, among), 18, lake) + away * 20;
     fog.far = lerp(lerp(2000, 5.5, among), 170, lake) + away * 120;

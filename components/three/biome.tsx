@@ -16,7 +16,7 @@ import {
   ShaderMaterial,
   Vector3,
 } from 'three';
-import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep } from '@/lib/journey';
+import { BEATS, belowVisible, journey, landingAt, RAINBOW_LAYER, smoothstep, streamsWhite, toyClouds, toyVisible } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
 import { Foliage } from './foliage';
 import { landingMaterial } from './landing';
@@ -26,7 +26,7 @@ import { SilhouetteOutline } from './silhouette-outline';
 import { bloomAt, SUN_POSITION } from './sky';
 import { Spray } from './spray';
 import { useStudioReflections } from './studio-environment';
-import { waterLanding, waterMaterial, waterTime } from './water';
+import { waterLanding, waterMaterial, waterTime, waterWhite } from './water';
 
 export const DRACO_PATH = '/draco/';
 const URL = '/models/micro-biome.glb';
@@ -181,6 +181,12 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   }, [scene]);
 
   const canyon = useMemo(() => scene.getObjectByName('LandingCanyon') as Mesh | undefined, [scene]);
+  // The toy itself (planter, spires, moss, letters, its water): everything under the biome's root that isn't part of
+  // the world below or the sky.
+  const toy = useMemo(() => {
+    const root = scene.getObjectByName('MicroBiome') ?? scene;
+    return root.children.filter((o) => !isSkyPart(o.name));
+  }, [scene]);
   const below = useMemo(() => {
     const list: Object3D[] = [];
     scene.traverse((o) => {
@@ -270,8 +276,11 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     waterLanding.value = landing;
     if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
-    // The clay clouds belong to the toy world above; they fade as the camera reaches the real one.
-    const clouds = smoothstep(30, 110, journey.frame) * (1 - smoothstep(600, 690, journey.frame));
+    // The clay clouds belong to the toy world above; they fade just after the camera passes through them.
+    const clouds = toyClouds(journey.frame);
+    const showToy = toyVisible(journey.frame);
+    for (const o of toy) o.visible = showToy;
+    waterWhite.value = streamsWhite(journey.frame);
     for (const m of cloudMaterials.current.values()) {
       m.opacity = clouds;
       m.visible = clouds > 0.001;
