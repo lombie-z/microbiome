@@ -1,8 +1,8 @@
 'use client';
 
 import { useFrame } from '@react-three/fiber';
-import { Bloom, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
-import { BlendFunction, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
+import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, Vignette } from '@react-three/postprocessing';
+import { BlendFunction, type DepthOfFieldEffect, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
 import { useRef } from 'react';
 import { type Mesh, ShaderChunk } from 'three';
 import { journey, landingAt, smoothstep } from '@/lib/journey';
@@ -29,6 +29,7 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
   const grade = useRef<GradeEffect>(null);
   const nearBlur = useRef<NearBlurEffect>(null);
   const rays = useRef<GodRaysEffect>(null);
+  const focus = useRef<DepthOfFieldEffect>(null);
 
   useFrame(() => {
     const underway = smoothstep(10, 120, journey.frame);
@@ -37,6 +38,9 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
     if (grain.current) grain.current.blendMode.opacity.value = 0.05 * underway;
     if (grade.current) grade.current.weight = landingAt(journey.frame);
     // Gentler rays at the landing: full strength they wash the sky's clouds out round the sun.
+    // The landing's lens: focused on the frog, the far valley, mountains and cliffs going soft (the reference's depth
+    // of field). Off everywhere else, and clearing as the camera rises away.
+    if (focus.current) focus.current.bokehScale = 1.6 * landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
     if (rays.current) rays.current.godRaysMaterial.weight = 0.6 * (1 - 0.55 * landingAt(journey.frame));
     // The shallow focus is the landing's still shot; it clears as the camera rises away (from frame 800).
     if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame) * (1 - smoothstep(800, 840, journey.frame));
@@ -44,6 +48,7 @@ export function Effects({ sun, multisampling }: { sun: Mesh | null; multisamplin
 
   return (
     <EffectComposer multisampling={multisampling} autoClear={false}>
+      <DepthOfField ref={focus} focusDistance={3.1} focusRange={6} bokehScale={0} />
       <NearBlur ref={nearBlur} />
       <Bloom mipmapBlur luminanceThreshold={1.1} luminanceSmoothing={0.25} intensity={0.55} radius={0.7} />
       {sun && !(process.env.NODE_ENV === 'development' && window.location.search.includes('norays')) && (
