@@ -26,9 +26,11 @@ float rFbm(vec3 p) {
 const PROJECTION = /* glsl */ `
   vec3 nW = normalize(vRockNormal);
   vec3 w = triWeights(nW);
-  vec3 pc = vRockPos / 11.0;
+  // Stretched up the walls, so its cracks run as tall vertical fractures.
+  vec3 pc = vRockPos * vec3(1.0 / 9.0, 1.0 / 16.0, 1.0 / 9.0);
   vec3 pf = vRockPos / 8.5 + 7.0;
-  float which = smoothstep(0.4, 0.62, rFbm(vRockPos * 0.09 + 3.0));
+  // (Only the layered sandstone: the second scan's blocky texture read as cobblestones at this scale.)
+  float which = 0.0;
 `;
 
 export function rockMaterial(source: MeshStandardMaterial) {
