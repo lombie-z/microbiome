@@ -152,10 +152,9 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
 if (diffuseColor.r > diffuseColor.g) { iblIrradiance *= 0.1; radiance *= 0.1; }
 else {
   iblIrradiance *= 0.0;
-  // The whole reflection across the flats, the brightest things in it lifted into gleams.
-  radiance *= 0.6 + 0.8 * smoothstep(2.0, 5.0, dot(radiance, vec3(0.3, 0.59, 0.11)));
+  radiance *= smoothstep(2.0, 5.0, dot(radiance, vec3(0.3, 0.59, 0.11)));
   #ifdef USE_CLEARCOAT
-  clearcoatRadiance *= 0.6 + 1.4 * smoothstep(2.0, 5.0, dot(clearcoatRadiance, vec3(0.3, 0.59, 0.11)));
+  clearcoatRadiance *= smoothstep(2.0, 5.0, dot(clearcoatRadiance, vec3(0.3, 0.59, 0.11))) * 2.0;
   #endif
 }`,
           // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
