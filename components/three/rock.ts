@@ -1,9 +1,9 @@
 import type { MeshStandardMaterial } from 'three';
 import { scan, TRIPLANAR } from './scans';
 
-// Detail for the landing's canyon (art/build-landing.py): two scanned rock surfaces (Poly Haven's layered cliff_side
-// sandstone and rock_face_03) projected onto the walls from three sides and wandering between each other, their
-// detail and relief kept but recoloured to the reference's pink-cream; colour drifting through peach, rose and cream;
+// Detail for the landing's canyon (art/build-landing.py): a scanned rock surface (Poly Haven's layered cliff_side
+// sandstone) projected onto the walls from three sides and stretched into tall fractures, its detail and relief kept
+// but recoloured to the reference's pink-cream; colour drifting through peach, rose and cream;
 // crisp facets on the blocks; moss creeping onto the ledges. The mesh's vertex colour stays the base.
 const NOISE = /* glsl */ `
 float rHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -22,32 +22,24 @@ float rFbm(vec3 p) {
 }
 `;
 
-// Where on the wall, which of the two scans, and how the three projections weigh in.
+// Where on the wall, and how the three projections weigh in.
 const PROJECTION = /* glsl */ `
   vec3 nW = normalize(vRockNormal);
   vec3 w = triWeights(nW);
   // Stretched up the walls, so its cracks run as tall vertical fractures.
   vec3 pc = vRockPos * vec3(1.0 / 9.0, 1.0 / 16.0, 1.0 / 9.0);
-  vec3 pf = vRockPos / 8.5 + 7.0;
-  // (Only the layered sandstone: the second scan's blocky texture read as cobblestones at this scale.)
-  float which = 0.0;
 `;
 
 export function rockMaterial(source: MeshStandardMaterial) {
   const material = source.clone();
   material.roughness = 0.9;
   const cliff = scan('cliff_side');
-  const face = scan('rock_face_03');
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, {
       uCliffDiff: { value: cliff.diff },
       uCliffNor: { value: cliff.nor },
       uCliffRough: { value: cliff.rough },
       uCliffMean: { value: cliff.mean },
-      uFaceDiff: { value: face.diff },
-      uFaceNor: { value: face.nor },
-      uFaceRough: { value: face.rough },
-      uFaceMean: { value: face.mean },
     });
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vRockPos;\nvarying vec3 vRockNormal;')
@@ -61,8 +53,8 @@ export function rockMaterial(source: MeshStandardMaterial) {
         `#include <common>
 varying vec3 vRockPos;
 varying vec3 vRockNormal;
-uniform sampler2D uCliffDiff, uCliffNor, uCliffRough, uFaceDiff, uFaceNor, uFaceRough;
-uniform vec3 uCliffMean, uFaceMean;
+uniform sampler2D uCliffDiff, uCliffNor, uCliffRough;
+uniform vec3 uCliffMean;
 ${NOISE}
 ${TRIPLANAR}`
       )
@@ -74,7 +66,7 @@ ${TRIPLANAR}`
   float steep = 1.0 - abs(vRockNormal.y);
   ${PROJECTION}
   // The scans' detail, relative to their own average colour: mostly light and shade, a little of their hue.
-  vec3 detail = mix(tri(uCliffDiff, pc, w) / uCliffMean, tri(uFaceDiff, pf, w) / uFaceMean, which);
+  vec3 detail = tri(uCliffDiff, pc, w) / uCliffMean;
   detail = mix(vec3(dot(detail, vec3(0.2126, 0.7152, 0.0722))), detail, 0.25);
   // Pushed past the scans' own contrast, so crevices go deep (an ambient-occlusion stand-in) and lit faces stay pale.
   detail = pow(clamp(detail, 0.0, 2.5), vec3(1.6));
@@ -101,7 +93,7 @@ ${TRIPLANAR}`
         `#include <roughnessmap_fragment>
 {
   ${PROJECTION}
-  roughnessFactor = clamp(mix(tri(uCliffRough, pc, w).r, tri(uFaceRough, pf, w).r, which), 0.55, 1.0);
+  roughnessFactor = clamp(tri(uCliffRough, pc, w).r, 0.55, 1.0);
 }`
       )
       .replace(
@@ -114,7 +106,7 @@ ${TRIPLANAR}`
   vec3 facet = normalize(cross(dFdx(vRockPos), dFdy(vRockPos)));
   if (dot(facet, nW) < 0.0) facet = -facet;
   vec3 base = normalize(mix(nW, facet, 0.5 * (1.0 - abs(nW.y))));
-  vec3 relief = normalize(mix(triNormal(uCliffNor, pc, w, base, 2.2), triNormal(uFaceNor, pf, w, base, 2.2), which));
+  vec3 relief = triNormal(uCliffNor, pc, w, base, 2.2);
   normal = normalize((viewMatrix * vec4(relief, 0.0)).xyz);
 }`
       );

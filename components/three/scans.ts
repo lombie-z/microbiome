@@ -9,7 +9,6 @@ export type Scan = { diff: Texture; nor: Texture; rough: Texture; mean: Vector3 
 // Mean linear colour of each colour map, so a shader can use a scan's detail while keeping its own palette.
 const MEANS: Record<string, [number, number, number]> = {
   cliff_side: [0.211, 0.091, 0.033],
-  rock_face_03: [0.231, 0.144, 0.083],
   rock_boulder_dry: [0.398, 0.337, 0.271],
 };
 

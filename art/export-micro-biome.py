@@ -11,7 +11,9 @@ STILL = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome.png')
 STILL_MASK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-mask.png')
 STILL_BACK = os.path.join(ROOT_DIR, 'public', 'images', '3d', 'micro-biome-back.png')
 DECIMATE = {'Cloud': 0.3, 'Letter': 0.15, 'Word': 0.15, 'Spire': 0.3, 'Moss': 0.12, 'Leaf': 0.5, 'Planter': 0.04, 'SkyCloud': 0.06,
-            'Landing.Canyon': 0.35, 'Landing.Shrubs': 0.3, 'Landing.Blossom': 0.35, 'Landing.Frog': 0.35}
+            'Landing.Canyon': 0.35, 'Landing.Shrubs': 0.3, 'Landing.Blossom': 0.35, 'Landing.Frog': 0.35,
+            # Small or soft in the frame (beads, blurred stones, far ridges): cheap to thin.
+            'Landing.Dew': 0.3, 'Landing.Lilies': 0.45, 'Landing.Pebbles': 0.5, 'Landing.Mountains': 0.5}
 # Point attributes the site's water shader reads (glTF only carries custom attributes named with a leading underscore).
 WATER_ATTRIBUTES = ('flow', 'foam', 'fade')
 
@@ -76,6 +78,12 @@ def freeze(o):
 
 # The clean planter kept for editing isn't part of the model.
 bpy.data.objects.remove(bpy.data.objects['Planter.Source'])
+
+# Not drawn on the site any more (its real waterfall is particles and a sheet; the spray particles stand in for the
+# splash), so not shipped.
+for name in ('Fall.Main', 'Splash'):
+    if name in bpy.data.objects:
+        bpy.data.objects.remove(bpy.data.objects[name])
 
 meshes = []
 for o in list(root.children_recursive):
