@@ -114,7 +114,7 @@ function pickSpots(canyon: Mesh, max: number) {
   const n = new Vector3();
   const normalMatrix = new Matrix3().getNormalMatrix(canyon.matrixWorld);
   const spots: Spot[] = [];
-  for (let i = 0; i < position.count && spots.length < max * 3; i++) {
+  for (let i = 0; i < position.count; i++) {
     p.fromBufferAttribute(position, i).applyMatrix4(canyon.matrixWorld);
     n.fromBufferAttribute(normal, i).applyMatrix3(normalMatrix).normalize();
     const above = p.y - LAKE_Y;
@@ -123,9 +123,12 @@ function pickSpots(canyon: Mesh, max: number) {
     const r = hash(p.x, p.y, p.z);
     // Tops and ledges: well wooded. Faces: in patches, and hanging along the fractures.
     const ledge = n.y > 0.55;
-    const chance = ledge ? 0.25 + 0.6 * patch : n.y > -0.3 ? Math.max(0, patch - 0.45) * 1.1 : 0;
+    // The bay's far shore on the left of the landing's view (three z negative, toward the sun) is wooded and in
+    // flower down to the water, as the reference's hillside.
+    const bay = p.z < -12 && p.x > -15 ? 1 : 0;
+    const chance = (ledge ? 0.25 + 0.6 * patch : n.y > -0.3 ? Math.max(0, patch - 0.45) * 1.1 : 0) + bay * 0.5;
     if (r > chance) continue;
-    const blossom = hash(p.z, p.x, 3.1) < 0.22 && Math.hypot(p.x + 5, p.z) < 40;
+    const blossom = hash(p.z, p.x, 3.1) < (bay ? 0.4 : 0.22) && Math.hypot(p.x + 5, p.z) < 40;
     spots.push({ p: p.clone(), n: n.clone(), size: ledge ? 0.25 + 0.4 * hash(p.y, p.z, p.x) : 0.15 + 0.25 * hash(p.y, p.z, p.x), blossom });
   }
   // Thin to the budget evenly.
