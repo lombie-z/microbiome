@@ -2,7 +2,7 @@
 
 import { PerformanceMonitor, SoftShadows, useProgress } from '@react-three/drei';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Suspense, useEffect, useState } from 'react';
+import { type RefObject, Suspense, useEffect, useRef, useState } from 'react';
 import type { Mesh } from 'three';
 import { devFlag as flag, isLightDevice, journey } from '@/lib/journey';
 import { Biome } from './biome';
@@ -42,10 +42,28 @@ function ShadowBudget() {
   return null;
 }
 
+/**
+ * A resolution change reallocates every render buffer (a visible hitch), so it waits until the scroll has been still
+ * for half a second.
+ */
+function ApplyWhenStill({ wanted, dpr, setDpr }: { wanted: RefObject<number>; dpr: number; setDpr: (dpr: number) => void }) {
+  const still = useRef({ frame: -1, since: 0 });
+  useFrame(({ clock }) => {
+    const s = still.current;
+    if (Math.abs(journey.frame - s.frame) > 0.01) {
+      s.frame = journey.frame;
+      s.since = clock.elapsedTime;
+    }
+    if (wanted.current !== dpr && clock.elapsedTime - s.since > 0.5) setDpr(wanted.current);
+  });
+  return null;
+}
+
 /** Dev: the renderer on window.__renderer, for measuring draw calls and frame cost. */
 function Expose() {
   useFrame(({ gl }) => {
-    (window as unknown as { __renderer?: unknown }).__renderer = gl;
+    (window as unknown as { __renderer?: unknown; __journeyFrame?: number }).__renderer = gl;
+    (window as unknown as { __journeyFrame?: number }).__journeyFrame = journey.frame;
   });
   return null;
 }
@@ -56,12 +74,16 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
   // Resolution adapts to the machine: down toward 1 while frames are slow, back up (to the cap) when there's room.
   const maxDpr = light ? 1.5 : 1.75;
   const [dpr, setDpr] = useState(maxDpr);
+  const wanted = useRef(maxDpr);
   return (
     <Canvas shadows={!flag('noshadow')} flat dpr={dpr} gl={{ antialias: false }} style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1 }}>
       <PerformanceMonitor
         bounds={(refresh) => (refresh > 90 ? [50, 90] : [40, 58])}
-        onChange={({ factor }) => setDpr(Math.round((1 + (maxDpr - 1) * factor) * 4) / 4)}
+        onChange={({ factor }) => {
+          wanted.current = Math.round((1 + (maxDpr - 1) * factor) * 4) / 4;
+        }}
       />
+      <ApplyWhenStill wanted={wanted} dpr={dpr} setDpr={setDpr} />
       <ShadowBudget />
       {!flag('nosoft') && <SoftShadows size={42} samples={light ? 6 : 10} focus={0.35} />}
       <Progress onProgress={onProgress} />

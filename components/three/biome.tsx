@@ -13,8 +13,12 @@ import {
   MeshBasicMaterial,
   type MeshPhysicalMaterial,
   type Object3D,
+  PerspectiveCamera,
+  PMREMGenerator,
   ShaderMaterial,
+  type Texture,
   Vector3,
+  WebGLRenderTarget,
 } from 'three';
 import { BEATS, belowVisible, devFlag, journey, landingAt, ledgeIn, RAINBOW_LAYER, smoothstep, toyPresence } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
@@ -218,34 +222,91 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
   useStudioReflections(scene, 0.8);
   // The landing's reeds reflect the landing itself, wet and glossy.
   useLandingReflections(scene, ['Reed'], 2);
-  // Compile every shader up front (with everything shown, so the sun, clouds and rainbow that appear later are
-  // included), then report ready once a frame has drawn: no stalls mid-scroll when something first comes into view.
+  // Compile every shader and upload everything up front (with everything shown, so what appears later is included),
+  // then report ready once a frame has drawn: no stalls mid-scroll when something first comes into view.
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const threeScene = useThree((s) => s.scene);
   useEffect(() => {
     let live = true;
     const hidden: Object3D[] = [];
-    threeScene.traverse((o) => {
-      if (!o.visible) {
-        o.visible = true;
-        hidden.push(o);
-      }
-    });
+    const hiddenMaterials: Material[] = [];
+    const show = () =>
+      threeScene.traverse((o) => {
+        if (!o.visible) {
+          o.visible = true;
+          hidden.push(o);
+        }
+        const m = (o as Mesh).material;
+        for (const material of Array.isArray(m) ? m : m ? [m] : []) {
+          if (!material.visible) {
+            material.visible = true;
+            hiddenMaterials.push(material);
+          }
+        }
+      });
+    const restore = () => {
+      for (const o of hidden) o.visible = false;
+      for (const m of hiddenMaterials) m.visible = false;
+    };
+    show();
     // Never let the overlay hang on it: some browsers stall parallel shader compiles (e.g. in a background tab).
     const settle = new Promise((resolve) => setTimeout(resolve, 3000));
-    Promise.race([gl.compileAsync(threeScene, camera), settle])
+    // Textures still downloading (the scans and sky photo) are waited for, briefly, so they can be uploaded too.
+    const textures = new Set<Texture>();
+    threeScene.traverse((o) => {
+      const m = (o as Mesh).material as (Material & Record<string, unknown>) | undefined;
+      const uniforms = (m as unknown as { uniforms?: Record<string, { value: unknown }> })?.uniforms ?? {};
+      for (const v of [...Object.values(m ?? {}), ...Object.values(uniforms).map((u) => u?.value)]) if ((v as Texture)?.isTexture) textures.add(v as Texture);
+    });
+    const loaded = Promise.all(
+      [...textures].map(
+        (t) =>
+          new Promise<void>((resolve) => {
+            const check = () => (t.image || !live ? resolve() : setTimeout(check, 50));
+            check();
+          })
+      )
+    );
+    Promise.race([Promise.all([gl.compileAsync(threeScene, camera), loaded]), settle])
       .catch(() => {})
       .then(() => {
-        for (const o of hidden) o.visible = false;
+        if (!live) return;
+        // Draw everything once, off screen, from high above the canyon: every mesh, texture and shadow shader goes up
+        // to the graphics card now rather than the first time it scrolls into view (a visible hitch mid-scroll).
+        show();
+        for (const t of textures) if (t.image) gl.initTexture(t);
+        const target = new WebGLRenderTarget(64, 64);
+        const overview = new PerspectiveCamera(100, 1, 0.1, 2000);
+        overview.position.set(-40, 40, 0);
+        overview.lookAt(0, -10, 0);
+        overview.updateMatrixWorld();
+        // (Every layer, so the rainbow's included.)
+        overview.layers.enableAll();
+        const previous = gl.getRenderTarget();
+        gl.shadowMap.needsUpdate = true;
+        gl.setRenderTarget(target);
+        gl.render(threeScene, overview);
+        // And the planter's materials as they'll be while it fades out.
+        for (const m of toyMaterials) m.transparent = true;
+        gl.render(threeScene, overview);
+        for (const m of toyMaterials) m.transparent = false;
+        gl.setRenderTarget(previous);
+        target.dispose();
+        // The prefiltering shaders the landing's reflection capture uses (components/three/landing-reflections.ts).
+        const pmrem = new PMREMGenerator(gl);
+        pmrem.compileCubemapShader();
+        pmrem.dispose();
+        restore();
         requestAnimationFrame(() => requestAnimationFrame(() => live && onReady()));
         // rAF doesn't run in a hidden tab; report anyway so it's ready when the tab comes back.
         setTimeout(() => live && onReady(), 600);
       });
     return () => {
       live = false;
+      restore();
     };
-  }, [gl, camera, threeScene, onReady]);
+  }, [gl, camera, threeScene, onReady, toyMaterials]);
   useEffect(() => {
     if (sun.current) onSun(sun.current);
   }, [onSun]);
