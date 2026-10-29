@@ -133,10 +133,11 @@ if (diffuseColor.g > diffuseColor.r) {
 if (diffuseColor.r > diffuseColor.g) {
   vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
   float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  float sunward = 0.35 + 0.65 * smoothstep(-0.3, 0.6, dot(nW, ${SUN_DIR}));
+  // Only on the side facing the sun, and only a touch.
+  float sunward = smoothstep(0.05, 0.6, dot(nW, ${SUN_DIR}) + 0.15);
   float fibre = lNoise(vLandingPos * vec3(900.0, 260.0, 900.0));
-  float tips = smoothstep(0.72, 0.9, fibre);
-  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * (pow(rim, 1.6) * 1.4 + tips * (0.4 + rim) * 1.6) * sunward;
+  float tips = smoothstep(0.75, 0.92, fibre);
+  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * (pow(rim, 2.0) * 0.45 + tips * rim * 0.6) * sunward;
 }`,
       });
     case 'Pad':
