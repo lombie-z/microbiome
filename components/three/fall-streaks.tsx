@@ -12,7 +12,7 @@ import {
   PlaneGeometry,
   ShaderMaterial,
 } from 'three';
-import { belowVisible, isLightDevice, journey, ledgeIn } from '@/lib/journey';
+import { belowVisible, devFlag, isLightDevice, journey, ledgeIn } from '@/lib/journey';
 import { waterLanding } from './water';
 
 // The real waterfall: thousands of white streaks pouring over the lip of the rock ledge under the planter
@@ -22,13 +22,18 @@ import { waterLanding } from './water';
 const LIP_TOP = -0.7; // the ledge's top (three y: Blender's z)
 // The lip curves back into the cliff at both ends (the ledge is a dome half sunk in the rock: centre x 2.0, reaching
 // 3.0 out and 2.7 along).
-const lipX = (z: number) => 2.0 - 3.0 * Math.sqrt(Math.max(0, 1 - (z / 2.7) ** 2));
-const LIP_GLSL = 'float lipX(float z) { return 2.0 - 3.0 * sqrt(max(0.0, 1.0 - pow(z / 2.7, 2.0))); }';
+// (Set a little in from the dome's ideal edge: its rock is lumped inward there, so water at the ideal edge hung in the
+// air in front of it.)
+const LIP_IN = 0.14;
+const lipX = (z: number) => 2.0 + LIP_IN - 3.0 * Math.sqrt(Math.max(0, 1 - (z / 2.7) ** 2));
+const LIP_GLSL = `float lipX(float z) { return ${(2.0 + LIP_IN).toFixed(2)} - 3.0 * sqrt(max(0.0, 1.0 - pow(z / 2.7, 2.0))); }`;
 // The water rolls over the lip (a quarter-round of this radius) and leaves it going outward: it falls clear of the
 // undercut rock in an arc, x moving out by ARC * sqrt(distance fallen).
 const ROLL = 0.22;
 const ARC = 0.55;
-const FLOW_Y = LIP_TOP + 0.08; // the water running across the ledge's top to the lip (over its lumps)
+// The water running across the ledge's top to the lip: down among its lumps, not floating over them (from below, a sheet
+// over the lumps showed as a white band above the rock).
+const FLOW_Y = LIP_TOP - 0.04;
 const START_Y = FLOW_Y - ROLL; // where the free fall begins, at the foot of the roll
 const BOTTOM = -11.05; // the pool
 const RZ = 3.75; // the curtain's half-width across the landing's view (three z)
@@ -76,7 +81,9 @@ void main() {
   float len = (0.14 + v * 0.06) * mix(1.0, 0.45, uLanding);
   float width = aWidth * (1.0 + fallen * 0.08);
   vec3 right = normalize(vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]));
-  vec3 p = centre + right * position.x * width + vec3(0.0, 1.0, 0.0) * position.y * len;
+  // (Never reaching up past where the fall starts: the smear trails above each streak, so it's held below the lip.)
+  float lift = min(0.5 * len, top - centre.y);
+  vec3 p = centre + right * position.x * width + vec3(0.0, 1.0, 0.0) * (position.y * len - 0.5 * len + lift);
   gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
   vQuad = position.xy * 2.0;
   // In over the lip, out into the splash; shaped as the reference's fall (a main column, a gap, a thin fall).
@@ -298,13 +305,13 @@ export function FallStreaks() {
   }, [sheet]);
 
   useFrame((state) => {
-    flow.material.visible = belowVisible(journey.frame);
+    flow.material.visible = belowVisible(journey.frame) && !devFlag('noflow');
     material.uniforms.uTime.value = state.clock.elapsedTime;
     sheet.uniforms.uTime.value = state.clock.elapsedTime;
     // Both only with the world below (lib/journey.ts belowVisible): the ledge is part of it.
     const real = belowVisible(journey.frame);
-    material.visible = real;
-    sheet.visible = real;
+    material.visible = real && !devFlag('nostrands');
+    sheet.visible = real && !devFlag('nosheet');
     // Coming in with the ledge.
     const fadeIn = ledgeIn(journey.frame);
     material.uniforms.uOpacity.value = 0.5 * fadeIn;
