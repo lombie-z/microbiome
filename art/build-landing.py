@@ -192,13 +192,18 @@ bm = bmesh.new()
 bmesh.ops.create_uvsphere(bm, u_segments=64, v_segments=32, radius=1.0)
 for v in bm.verts:
     n = v.co.copy()
-    x = LEDGE_CENTRE.x + n.x * LEDGE_REACH[0]
-    y = n.y * LEDGE_REACH[1]
-    # Top flattened into the shelf; below, a deep rounded bulge that tucks back into the cliff.
-    z = LEDGE_TOP - 0.08 + max(n.z, 0.0) * 0.12 if n.z > 0 else LEDGE_TOP - 0.1 + n.z * (1.0 + 0.9 * max(0.0, n.x))
+    below = max(0.0, -n.z)
+    # The front lip (the equator, just under the top) is the most forward point: below it the rock is undercut,
+    # stepping back into the cliff, so the water falls clear of it.
+    reach = 1.0 - 0.55 * below
+    x = LEDGE_CENTRE.x + n.x * LEDGE_REACH[0] * reach
+    y = n.y * LEDGE_REACH[1] * (1.0 - 0.25 * below)
+    # Top flattened into the shelf; below, a deep bulge tucked back into the cliff.
+    z = LEDGE_TOP - 0.08 + n.z * 0.12 if n.z > 0 else LEDGE_TOP - 0.1 + n.z * (1.0 + 0.9 * max(0.0, n.x))
     p_ = Vector((x, y, z))
-    # Lumpy rock all over, cracked into blocks on the face.
-    p_ += n * (fbm(p_ * 0.9, 4) * 0.28 + noise.noise(p_ * 2.6) * 0.06)
+    # Lumpy rock: free on the top, only ever inward below the lip (nothing juts out in front of the falling water).
+    bump = fbm(p_ * 0.9, 4) * 0.28 + noise.noise(p_ * 2.6) * 0.06
+    p_ += n * (bump if n.z > 0.1 else -abs(bump))
     v.co = p_
 bm.normal_update()
 col = bm.loops.layers.color.new('Col')
