@@ -127,11 +127,17 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
         light: SUN_SHEEN(14.0, 0.9) + 'totalEmissiveRadiance += diffuseColor.rgb * vec3(0.55, 0.5, 0.25);',
       });
     case 'Frog':
-      // Wet skin: glossy, with fine bumps darkening and lightening the mottling, rimmed by the low sun behind it.
-      return physical(source, { roughness: 0.28, clearcoat: 0.9, clearcoatRoughness: 0.2 }, 'frog', {
-        colour: 'diffuseColor.rgb *= (0.86 + 0.28 * lNoise(vLandingPos * 140.0));',
-        normal: BUMP('lNoise(vLandingPos * 160.0)', 0.0015),
-        light: `${SUN_SHEEN(24.0, 1.4)}${BACKLIT(0.8)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.18, 0.14);`,
+      // Wet, warty skin: glossy, bumpy at two scales, rimmed by the low sun behind it, and the sun warming its back and
+      // head (the light comes from up and to the left, so up-facing skin glows gold-olive).
+      return physical(source, { roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.18 }, 'frog', {
+        colour: 'diffuseColor.rgb *= (0.84 + 0.32 * lNoise(vLandingPos * 140.0));',
+        normal: BUMP('smoothstep(0.45, 0.85, lNoise(vLandingPos * 70.0)) * 0.7 + lNoise(vLandingPos * 220.0) * 0.3', 0.0035),
+        light: `${SUN_SHEEN(24.0, 1.6)}${BACKLIT(0.9)}
+{
+  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  float top = smoothstep(0.0, 0.9, dot(nW, normalize(vec3(0.3, 1.0, -0.5))));
+  totalEmissiveRadiance += diffuseColor.rgb * (vec3(0.12, 0.11, 0.09) + vec3(0.42, 0.36, 0.2) * top);
+}`,
       });
     case 'Dew':
       // Clear beads of water: you see the pad through them, and each holds a hot point of the sun.

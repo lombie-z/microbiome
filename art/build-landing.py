@@ -430,9 +430,9 @@ finish('Landing.Lilies', bm, material('Lily', 0.5))
 
 # The frog: one smooth body, sitting up on the big pad side-on, looking right toward the fall. Built as a skeleton of
 # tapering limbs (chains of spheres), fused into one skin by a voxel remesh and smoothed so the joins flow.
-FROG_BACK = Color((0.34, 0.31, 0.16))
-FROG_SIDE = Color((0.52, 0.47, 0.27))
-FROG_SPOT = Color((0.2, 0.18, 0.08))
+FROG_BACK = Color((0.5, 0.46, 0.24))
+FROG_SIDE = Color((0.6, 0.55, 0.32))
+FROG_SPOT = Color((0.27, 0.24, 0.11))
 FROG_BELLY = Color((0.93, 0.88, 0.74))
 FROG_RIDGE = Color((0.66, 0.6, 0.38))
 FROG_BASE = at(530, 828) + Vector((0, 0, 0.018))
