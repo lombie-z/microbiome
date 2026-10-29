@@ -264,199 +264,348 @@ bm.free()
 me.materials.append(bpy.data.materials['Water'])
 link('Pool', me)
 
-# --- Foreground garden (the landing shot looks east from CAMERA, at eye level just above the water) --------------------
+# --- Foreground garden ------------------------------------------------------------------------------------------------
+# Laid out from the reference image (art/reference/landing-pov): each piece is placed by its pixel position in that
+# 1536x1024 frame, cast back from the landing camera (JourneyCam at frame 770, art/build-journey.py) onto the water.
 
-CAMERA = Vector((-27.0, -2.5))
-FG = material('Foreground', 0.55)
+scene.frame_set(770)
+VIEW = bpy.data.objects['JourneyCam'].matrix_world.copy()
+EYE = VIEW.translation.copy()
+FORWARD = (VIEW.to_3x3() @ Vector((0, 0, -1))).normalized()
+FOV = math.radians(38.0)
+REF_W, REF_H = 1536, 1024
 
 
-def colour_faces(geom_verts, layer, colour_fn):
+def ray(px, py):
+    t = math.tan(FOV / 2)
+    return (VIEW.to_3x3() @ Vector(((px / REF_W * 2 - 1) * t * REF_W / REF_H, (1 - py / REF_H * 2) * t, -1))).normalized()
+
+
+def at(px, py, z=LAKE_Z):
+    """The point on the plane at height z seen at pixel (px, py) of the reference."""
+    d = ray(px, py)
+    return EYE + d * ((z - EYE.z) / d.z)
+
+
+def px_size(point, pixels):
+    """How many metres `pixels` spans at `point`'s depth."""
+    depth = (point - EYE).dot(FORWARD)
+    return pixels * 2 * depth * math.tan(FOV / 2) / REF_H
+
+
+def height_at(base, py):
+    """How high above `base` a point must stand to appear at row py (for the reeds' tips and the cattail heads)."""
+    lo, hi = 0.0, 6.0
+    for _ in range(40):
+        mid = (lo + hi) / 2
+        p = base + Vector((0, 0, mid))
+        v = VIEW.inverted() @ p
+        row = (1 - (v.y / -v.z) / math.tan(FOV / 2)) * REF_H / 2
+        lo, hi = (mid, hi) if row > py else (lo, mid)
+    return lo
+
+
+def rotate_z(v, a):
+    c, s = math.cos(a), math.sin(a)
+    return Vector((v.x * c - v.y * s, v.x * s + v.y * c, v.z))
+
+
+def colour_faces(bm, geom_verts, layer, colour_fn):
     for f in {f for v in geom_verts for f in v.link_faces}:
         for loop in f.loops:
             c = colour_fn(loop.vert.co)
             loop[layer] = (c.r, c.g, c.b, 1.0)
 
 
-def solid(c):
-    return lambda co: c
+def finish(name, bm, mat, smooth=True):
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    for p in me.polygons:
+        p.use_smooth = smooth
+    me.materials.append(mat)
+    return link(name, me)
 
 
+# Lily pads: broad, notched, the rim lifting a little; yellow-green where the low sun comes through, a gold rim.
+PAD = Color((0.16, 0.33, 0.05))
+PAD_LIT = Color((0.42, 0.56, 0.12))
+PAD_VEIN = Color((0.55, 0.66, 0.24))
+PAD_EDGE = Color((0.78, 0.55, 0.14))
+# (px, py, half-width in px) in the reference.
+PADS = [(520, 852, 330), (130, 765, 130), (150, 722, 95), (385, 722, 115), (80, 838, 120), (300, 674, 135), (430, 646, 60),
+        (545, 641, 40), (205, 652, 55), (1150, 738, 95), (1235, 746, 55), (1245, 653, 40), (90, 965, 210), (330, 925, 110),
+        (640, 650, 45), (40, 700, 60)]
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
+pad_centres = []
+for k, (px, py, half) in enumerate(PADS):
+    centre = at(px, py) + Vector((0, 0, 0.012))
+    r = px_size(centre, half)
+    spin = rnd.uniform(0, 6.28)
+    pad_centres.append((centre, r))
+    # Concentric rings of quads round a centre vertex, so the rim can curl up and carry its gold edge; the notch is a
+    # wedge pinched in to the centre.
+    SEGS, RINGS = 72, 7
+    hub = bm.verts.new((0, 0, 0))
+    rings = []
+    for k in range(1, RINGS + 1):
+        rr = (k / RINGS) ** 0.8
+        ring = []
+        for j in range(SEGS):
+            a = 2 * math.pi * j / SEGS
+            notch = smoothstep(0.2, 0.08, min(a, 2 * math.pi - a))
+            ring.append(bm.verts.new((math.cos(a) * rr * (1 - 0.94 * notch), math.sin(a) * rr * (1 - 0.94 * notch), 0)))
+        rings.append(ring)
+    for j in range(SEGS):
+        bm.faces.new((hub, rings[0][j], rings[0][(j + 1) % SEGS]))
+        for k in range(RINGS - 1):
+            bm.faces.new((rings[k][j], rings[k + 1][j], rings[k + 1][(j + 1) % SEGS], rings[k][(j + 1) % SEGS]))
+    verts = [hub] + [v for ring in rings for v in ring]
+    for v in verts:
+        d = v.co.xy.length
+        v.co.z = smoothstep(0.82, 1.0, d) * 0.05 + noise.noise(v.co * 2.5 + centre) * 0.025
+        v.co = rotate_z(v.co * r, spin) + centre
 
-# Lily pads: a field reaching away on the left, the frog's pad big and close.
-PAD = Color((0.15, 0.3, 0.09))
-PAD_VEIN = Color((0.36, 0.5, 0.2))
-PAD_EDGE = Color((0.55, 0.42, 0.16))
+    def pad_colour(co, centre=centre, r=r, spin=spin):
+        d = (co - centre).xy
+        t = d.length / r
+        vein = abs(math.sin(math.atan2(d.y, d.x) * 11 - spin * 11)) ** 30
+        lit = smoothstep(-0.3, 0.6, noise.noise(co * 1.7 + centre)) * 0.6 + 0.4 * smoothstep(0.3, 1.0, -d.y / r)
+        c = mix(PAD, PAD_LIT, lit)
+        c = mix(c, PAD_VEIN, vein * 0.6 * smoothstep(0.1, 0.4, t))
+        return mix(c, PAD_EDGE, smoothstep(0.88, 1.0, t) * 0.85)
 
+    colour_faces(bm, verts, col, pad_colour)
+finish('Landing.Pads', bm, material('Pad', 0.4))
 
-def lily_pad(centre, r, spin):
-    geom = bmesh.ops.create_circle(bm, cap_ends=True, segments=72, radius=r)
-    # A fan of triangles from a centre point, so the radial veins have vertices to colour.
-    rim = set(geom['verts'])
-    cap = [f for f in bm.faces if set(f.verts) <= rim]
-    poked = bmesh.ops.poke(bm, faces=cap)
-    geom['verts'] = list(rim) + [v for v in poked['verts']]
-    for v in geom['verts']:
-        a = math.atan2(v.co.y, v.co.x)
-        if abs(a) < 0.18:
-            v.co *= 0.08
-        v.co.z += noise.noise(v.co * 3 + centre) * r * 0.06
-        x, y = v.co.x, v.co.y
-        v.co.x, v.co.y = x * math.cos(spin) - y * math.sin(spin), x * math.sin(spin) + y * math.cos(spin)
-        v.co += centre
-    def pad_colour(co):
-        d = co.xy - centre.xy
-        vein = abs(math.sin(math.atan2(d.y, d.x) * 9 - spin * 9)) ** 24  # radial veins
-        c = mix(PAD, PAD_VEIN, vein * 0.7 + noise.noise(co * 9) * 0.15)
-        return mix(c, PAD_EDGE, smoothstep(0.82, 1.0, d.length / r) * 0.7)
-
-    colour_faces(geom['verts'], col, pad_colour)
-
-
-FROG_PAD = Vector((-25.0, -2.05, LAKE_Z + 0.015))
-lily_pad(FROG_PAD, 0.42, 1.1)
-for i in range(26):
-    p = Vector((rnd.uniform(-26.3, -18), rnd.uniform(-2.6, 2.4), LAKE_Z + 0.012))
-    if (p.xy - FROG_PAD.xy).length < 0.6 or (p.xy - CAMERA).length < 0.9:
-        continue
-    lily_pad(p, rnd.uniform(0.15, 0.38) * (1 + 0.04 * (p.x + 26)), rnd.uniform(0, 6.28))
-
-# Water lilies: two rings of pointed petals, white flushing pink at the tips, a yellow heart.
-PETAL = Color((0.98, 0.95, 0.94))
-PETAL_TIP = Color((0.96, 0.7, 0.78))
-HEART = Color((0.98, 0.8, 0.3))
-for centre in (Vector((-25.9, -0.9, LAKE_Z + 0.03)), Vector((-22.5, 0.6, LAKE_Z + 0.03)), Vector((-20.4, -1.4, LAKE_Z + 0.03))):
-    for ring, (count, length, tilt) in enumerate(((9, 0.13, 0.9), (8, 0.1, 0.45))):
+# Water lilies: pointed petals in three rings, white flushing pink, cupped up round a yellow heart.
+PETAL = Color((0.99, 0.95, 0.95))
+PETAL_TIP = Color((0.97, 0.66, 0.78))
+HEART = Color((1.0, 0.78, 0.25))
+bm = bmesh.new()
+col = bm.loops.layers.color.new('Col')
+for px, py, half in ((85, 690, 70), (365, 637, 22), (462, 641, 20), (528, 637, 16), (700, 645, 14)):
+    centre = at(px, py) + Vector((0, 0, 0.02))
+    size = px_size(centre, half)
+    for ring, (count, length, tilt) in enumerate(((10, 1.0, 0.35), (9, 0.85, 0.8), (7, 0.65, 1.2))):
         for k in range(count):
-            a = 2 * math.pi * (k + 0.5 * ring) / count
-            geom = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=1)
+            a = 2 * math.pi * (k + 0.5 * ring) / count + rnd.uniform(-0.1, 0.1)
+            L = length * size * rnd.uniform(0.9, 1.05)
+            geom = bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=1)
             for v in geom['verts']:
-                v.co = Vector((v.co.x * length * 0.5 + length * 0.5, v.co.y * length * 0.18, v.co.z * 0.012))
-                x, z = v.co.x, v.co.z
-                v.co.x, v.co.z = x * math.cos(tilt) - z * math.sin(tilt), x * math.sin(tilt) + z * math.cos(tilt)
-                x, y = v.co.x, v.co.y
-                v.co.x, v.co.y = x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a)
-                v.co += centre
-            colour_faces(geom['verts'], col, lambda co, c=centre, L=length: mix(PETAL, PETAL_TIP, smoothstep(0.4, 1.0, (co - c).length / L)))
-    geom = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=0.035)
+                # A pointed, cupped petal: long, narrow at the tip, curling up at its edges.
+                x = v.co.x * 0.5 + 0.5
+                w = math.sin(math.pi * min(x, 0.999) ** 0.8) * 0.2
+                local = Vector((x * L, v.co.y * L * w, v.co.z * L * 0.03 + (v.co.y * w) ** 2 * L * 1.2))
+                c, s = math.cos(tilt), math.sin(tilt)
+                local = Vector((local.x * c - local.z * s, local.y, local.x * s + local.z * c))
+                v.co = rotate_z(local, a) + centre
+            colour_faces(bm, geom['verts'], col, lambda co, c=centre, L=L: mix(PETAL, PETAL_TIP, smoothstep(0.55, 1.0, (co - c).length / L) * 0.8))
+    geom = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=size * 0.18)
     for v in geom['verts']:
-        v.co += centre + Vector((0, 0, 0.03))
-    colour_faces(geom['verts'], col, solid(HEART))
+        v.co.z *= 0.7
+        v.co += centre + Vector((0, 0, size * 0.15))
+    colour_faces(bm, geom['verts'], col, lambda co: HEART)
+finish('Landing.Lilies', bm, material('Lily', 0.5))
 
-# The frog on its pad, side-on to the camera, looking right toward the fall.
-FROG = Color((0.47, 0.44, 0.22))
-FROG_DARK = Color((0.26, 0.24, 0.12))
-FROG_BELLY = Color((0.88, 0.85, 0.62))
-EYE_GOLD = Color((0.85, 0.6, 0.2))
-frog_at = FROG_PAD + Vector((0.05, 0.0, 0.005))
+# The frog: one smooth body, sitting up on the big pad side-on, looking right toward the fall. Built as a skeleton of
+# tapering limbs (chains of spheres), fused into one skin by a voxel remesh and smoothed so the joins flow.
+FROG_BACK = Color((0.36, 0.33, 0.14))
+FROG_SIDE = Color((0.56, 0.5, 0.26))
+FROG_SPOT = Color((0.2, 0.18, 0.08))
+FROG_BELLY = Color((0.9, 0.84, 0.62))
+FROG_BASE = at(530, 828) + Vector((0, 0, 0.018))
+FROG_FACING = math.radians(-62)  # nose toward the fall, a little away from the camera
+FROG_SIZE = px_size(FROG_BASE, 170) / 0.36  # the reference's frog is about 170 px long; the model is 0.36 m
 
-
-FROG_SCALE = 0.75
-FROG_FACING = math.radians(-80)  # nose toward -y: side-on to the camera, looking right toward the fall
-
-
-def frog_part(offset, radii, colour_fn, segments=(20, 12)):
-    geom = bmesh.ops.create_uvsphere(bm, u_segments=segments[0], v_segments=segments[1], radius=1)
-    c, s_ = math.cos(FROG_FACING), math.sin(FROG_FACING)
-    for v in geom['verts']:
-        local = (Vector((v.co.x * radii[0], v.co.y * radii[1], v.co.z * radii[2])) + Vector(offset)) * FROG_SCALE
-        v.co = frog_at + Vector((local.x * c - local.y * s_, local.x * s_ + local.y * c, local.z))
-    colour_faces(geom['verts'], col, colour_fn)
-
-
-def mottled(co):
-    m = noise.noise(co * 40)
-    c = mix(FROG, FROG_DARK, smoothstep(0.1, 0.5, m))
-    return mix(c, FROG_BELLY, smoothstep(0.05, 0.0, co.z - frog_at.z - 0.05) * 0.8)
-
-
-frog_part((0.0, 0.0, 0.085), (0.15, 0.1, 0.085), mottled)  # body, nose toward +x
-frog_part((0.12, 0.0, 0.12), (0.085, 0.08, 0.06), mottled)  # head
+# (start, start radius, end, end radius) in the frog's frame: x forward (nose), y left, z up.
+FROG_LIMBS = [
+    ((-0.11, 0, 0.065), 0.07, (0.03, 0, 0.115), 0.085),  # body, rising to the shoulders
+    ((-0.06, 0, 0.05), 0.06, (0.05, 0, 0.07), 0.065),  # belly
+    ((0.03, 0, 0.115), 0.085, (0.11, 0, 0.152), 0.066),  # shoulders into the head
+    ((0.11, 0, 0.152), 0.066, (0.185, 0, 0.142), 0.034),  # the broad head narrowing to the snout
+    ((0.1, 0, 0.115), 0.06, (0.16, 0, 0.118), 0.035),  # throat and jaw
+]
 for side in (-1, 1):
-    frog_part((0.15, 0.05 * side, 0.165), (0.03, 0.03, 0.03), solid(EYE_GOLD), (12, 8))
-    frog_part((0.172, 0.055 * side, 0.168), (0.012, 0.016, 0.018), solid(Color((0.05, 0.04, 0.03))), (10, 6))
-    frog_part((-0.07, 0.09 * side, 0.05), (0.09, 0.04, 0.05), mottled)  # folded back leg
-    frog_part((0.0, 0.12 * side, 0.015), (0.08, 0.03, 0.02), mottled)  # foot
-    frog_part((0.13, 0.07 * side, 0.03), (0.025, 0.02, 0.05), mottled)  # front leg
+    FROG_LIMBS += [
+        ((0.115, 0.045 * side, 0.185), 0.032, (0.125, 0.05 * side, 0.195), 0.03),  # eye bulge
+        ((-0.1, 0.055 * side, 0.06), 0.05, (0.0, 0.095 * side, 0.065), 0.034),  # thigh, forward to the knee
+        ((0.0, 0.095 * side, 0.065), 0.032, (-0.075, 0.105 * side, 0.025), 0.022),  # shin, back to the ankle
+        ((-0.075, 0.105 * side, 0.02), 0.02, (0.03, 0.14 * side, 0.01), 0.011),  # long hind foot, splayed forward
+        ((0.03, 0.14 * side, 0.01), 0.011, (0.06, 0.16 * side, 0.008), 0.007),  # toes
+        ((0.1, 0.05 * side, 0.105), 0.026, (0.15, 0.06 * side, 0.015), 0.017),  # front leg
+        ((0.15, 0.06 * side, 0.012), 0.016, (0.185, 0.075 * side, 0.008), 0.008),  # hand
+    ]
+bm = bmesh.new()
+for a, ra, b, rb in FROG_LIMBS:
+    a, b = Vector(a), Vector(b)
+    steps = max(2, int((b - a).length / (min(ra, rb) * 0.35)) + 1)
+    for k in range(steps + 1):
+        t = k / steps
+        bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=10, radius=ra + (rb - ra) * t,
+                                  matrix=__import__('mathutils').Matrix.Translation(a.lerp(b, t)))
+me = bpy.data.meshes.new('FrogParts')
+bm.to_mesh(me)
+bm.free()
+parts = bpy.data.objects.new('FrogParts', me)
+scene.collection.objects.link(parts)
+remesh = parts.modifiers.new('Remesh', 'REMESH')
+remesh.mode = 'VOXEL'
+remesh.voxel_size = 0.004
+smooth = parts.modifiers.new('Smooth', 'CORRECTIVE_SMOOTH')
+smooth.iterations = 12
+smooth.use_only_smooth = True
+smooth.smooth_type = 'LENGTH_WEIGHTED'
+bpy.context.view_layer.update()
+frog_me = bpy.data.meshes.new_from_object(parts.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+bpy.data.objects.remove(parts)
+bpy.data.meshes.remove(me)
 
-# Cattails and tall grass, towering up the right of the frame.
-REED = Color((0.2, 0.36, 0.11))
-REED_DRY = Color((0.62, 0.58, 0.28))
-CATTAIL = Color((0.5, 0.3, 0.14))
+bm = bmesh.new()
+bm.from_mesh(frog_me)
+bpy.data.meshes.remove(frog_me)
+col = bm.loops.layers.color.new('Col')
 
 
-def blade(base, height, width, bend, colour):
-    """A tapering, curving grass blade (two-sided ribbon)."""
-    segs = 10
-    a = rnd.uniform(0, 6.28)
+def frog_colour(co):
+    # co is in the frog's local frame (before placing it).
+    belly = smoothstep(0.1, 0.03, co.z - 0.25 * max(co.x, 0)) * smoothstep(0.03, 0.0, abs(co.y) - 0.05)
+    throat = smoothstep(0.03, -0.01, co.z - 0.1 - 0.4 * (co.x - 0.12)) * smoothstep(0.08, 0.16, co.x)
+    top = smoothstep(0.03, 0.08, abs(co.y)) * 0.0 + smoothstep(0.06, 0.16, co.z)
+    c = mix(FROG_SIDE, FROG_BACK, top * 0.8)
+    spots = smoothstep(0.25, 0.45, noise.noise(co * 32 + Vector((3, 1, 7))))
+    c = mix(c, FROG_SPOT, spots * 0.75 * smoothstep(0.03, 0.1, co.z))
+    # The dark band from the eye back over the eardrum, and a pale lip line.
+    band = smoothstep(0.02, 0.0, abs(co.z - 0.165 + 0.3 * (co.x - 0.1))) * smoothstep(0.0, 0.05, 0.16 - abs(co.x - 0.05)) * smoothstep(0.04, 0.07, abs(co.y))
+    c = mix(c, FROG_SPOT, band * 0.6)
+    return mix(c, FROG_BELLY, max(belly, throat) * 0.85)
+
+
+for f in bm.faces:
+    for loop in f.loops:
+        c = frog_colour(loop.vert.co)
+        loop[col] = (c.r, c.g, c.b, 1.0)
+for v in bm.verts:
+    v.co = rotate_z(v.co * FROG_SIZE, FROG_FACING) + FROG_BASE
+finish('Landing.Frog', bm, material('Frog', 0.3))
+
+# Its eyes: gold, glossy, with a black horizontal pupil looking out to the side.
+EYE_GOLD = Color((0.95, 0.66, 0.18))
+EYE_RIM = Color((0.35, 0.22, 0.06))
+PUPIL = Color((0.02, 0.015, 0.01))
+bm = bmesh.new()
+col = bm.loops.layers.color.new('Col')
+for side in (-1, 1):
+    centre_local = Vector((0.124, 0.054 * side, 0.2))
+    r = 0.026
+    geom = bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=1)
+    out = Vector((0.35, side * 1.0, 0.25)).normalized()
+    for v in geom['verts']:
+        n = v.co.normalized()
+        facing = n.dot(out)
+        v.co = rotate_z((centre_local + n * r) * FROG_SIZE, FROG_FACING) + FROG_BASE
+        v.normal = n
+    for f in {f for v in geom['verts'] for f in v.link_faces}:
+        for loop in f.loops:
+            n = rotate_z(loop.vert.co - FROG_BASE, -FROG_FACING) / FROG_SIZE - centre_local
+            n.normalize()
+            facing = n.dot(out)
+            # The pupil: a horizontal slot round the outward axis.
+            up = Vector((0, 0, 1))
+            vert = abs(n.dot(up) - out.dot(up) * facing)
+            pupil = smoothstep(0.86, 0.9, facing) * smoothstep(0.2, 0.12, vert) + smoothstep(0.94, 0.97, facing)
+            c = mix(EYE_GOLD, EYE_RIM, smoothstep(0.55, 0.2, facing))
+            c = mix(c, PUPIL, min(1.0, pupil))
+            loop[col] = (c.r, c.g, c.b, 1.0)
+finish('Landing.FrogEyes', bm, material('FrogEye', 0.08))
+
+# Reeds and cattails, towering up the right of the frame from a bed at the water's edge.
+REED = Color((0.13, 0.27, 0.07))
+REED_TIP = Color((0.5, 0.52, 0.18))
+CATTAIL = Color((0.42, 0.24, 0.1))
+CATTAIL_LIT = Color((0.68, 0.42, 0.16))
+bm = bmesh.new()
+col = bm.loops.layers.color.new('Col')
+REED_BED = at(1420, 770)
+
+
+def blade(base, height, width, lean, bend_dir):
+    segs = 14
+    a = math.atan2(bend_dir.y, bend_dir.x) + math.pi / 2 + rnd.uniform(-0.6, 0.6)
     side = Vector((math.cos(a), math.sin(a), 0))
-    out = Vector((-side.y, side.x, 0))
     prev = None
     for k in range(segs + 1):
         t = k / segs
-        w = width * (1 - t) ** 0.8
-        centre = base + Vector((0, 0, height * t)) + out * bend * t * t
+        w = width * (1 - t) ** 0.6 * (0.6 + 0.4 * math.sin(math.pi * min(t * 1.6, 1.0)))
+        # Arching over toward bend_dir, more and more toward the tip.
+        centre = base + Vector((0, 0, height * t * (1 - 0.18 * lean * t))) + bend_dir * lean * height * t ** 2.2
         left, right = bm.verts.new(centre - side * w), bm.verts.new(centre + side * w)
         if prev:
             f = bm.faces.new((prev[0], prev[1], right, left))
             for loop in f.loops:
-                c = mix(colour, REED_DRY, t * 0.5)
+                c = mix(REED, REED_TIP, smoothstep(0.3, 1.0, t) * 0.7)
                 loop[col] = (c.r, c.g, c.b, 1.0)
         prev = (left, right)
 
 
-for i in range(90):
-    base = Vector((rnd.gauss(-24.4, 0.6), rnd.gauss(-4.0, 0.35), LAKE_Z - 0.05))
-    blade(base, rnd.uniform(0.9, 2.4), rnd.uniform(0.035, 0.085), rnd.uniform(-0.8, 0.8), REED)
-for i in range(7):
-    base = Vector((rnd.uniform(-25.4, -23.4), rnd.uniform(-4.4, -3.5), LAKE_Z - 0.05))
-    h = rnd.uniform(1.4, 2.4)
-    lean = Vector((rnd.uniform(-0.12, 0.12), rnd.uniform(-0.12, 0.12), 0))
-    geom = bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=0.014, radius2=0.008, depth=h)
+for i in range(150):
+    base = REED_BED + Vector((rnd.gauss(0.15, 0.3), rnd.gauss(-0.1, 0.35), -0.05))
+    top = height_at(base, rnd.uniform(-60, 420))
+    lean = rnd.uniform(0.0, 0.5) ** 1.5
+    bend = Vector((rnd.uniform(-1, 0.6), rnd.uniform(-0.4, 1.0), 0)).normalized()
+    blade(base, top, rnd.uniform(0.008, 0.02), lean, bend)
+# Cattails: tall stems with a brown velvet head and a thin spike above (heads as in the reference).
+for hx, head_top, head_bottom in ((1462, 105, 195), (1425, 210, 300), (1420, 318, 420), (1500, 260, 335), (1385, 420, 480)):
+    base = at(hx, 775) + Vector((rnd.uniform(-0.05, 0.05), rnd.uniform(-0.05, 0.05), -0.05))
+    z0, z1 = height_at(base, head_bottom), height_at(base, head_top)
+    stem_top = z1 + (z1 - z0) * 0.6
+    geom = bmesh.ops.create_cone(bm, cap_ends=True, segments=6, radius1=0.006, radius2=0.002, depth=stem_top)
     for v in geom['verts']:
-        v.co += base + Vector((0, 0, h / 2)) + lean * ((v.co.z + h / 2) / h)
-    colour_faces(geom['verts'], col, solid(REED))
-    geom = bmesh.ops.create_uvsphere(bm, u_segments=12, v_segments=8, radius=1)
+        v.co += base + Vector((0, 0, stem_top / 2))
+    colour_faces(bm, geom['verts'], col, lambda co: REED)
+    radius = px_size(base, 16)
+    geom = bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=12, radius=1)
     for v in geom['verts']:
-        v.co = Vector((v.co.x * 0.06, v.co.y * 0.06, v.co.z * 0.22)) + base + Vector((0, 0, h * 0.8)) + lean * 0.8
-    colour_faces(geom['verts'], col, solid(CATTAIL))
+        v.co = Vector((v.co.x * radius, v.co.y * radius, v.co.z * (z1 - z0) / 2)) + base + Vector((0, 0, (z0 + z1) / 2))
+    colour_faces(bm, geom['verts'], col, lambda co, b=base: mix(CATTAIL, CATTAIL_LIT, smoothstep(-0.2, 0.6, noise.noise(co * 60)) * 0.6))
+finish('Landing.Reeds', bm, material('Reed', 0.45))
 
-# Big smooth pebbles in the bottom right, glistening wet (on the site).
-STONE = Color((0.72, 0.6, 0.52))
-STONE_DARK = Color((0.38, 0.3, 0.27))
-for i in range(26):
-    r = rnd.uniform(0.07, 0.2)
-    centre = Vector((rnd.uniform(-26.2, -24.2), rnd.uniform(-3.6, -2.75), LAKE_Z + r * 0.1))
-    geom = bmesh.ops.create_uvsphere(bm, u_segments=28, v_segments=16, radius=1)
-    for v in geom['verts']:
-        v.co = Vector((v.co.x * r * 1.2, v.co.y * r, v.co.z * r * 0.7))
-        v.co += v.co.normalized() * noise.noise(v.co * 5 + centre) * r * 0.08
-        v.co += centre
-    # Mottled and speckled.
-    colour_faces(geom['verts'], col, lambda co: mix(STONE, STONE_DARK, max(smoothstep(-0.2, 0.5, noise.noise(co * 8)) * 0.6, smoothstep(0.55, 0.7, noise.noise(co * 60)))))
-
-me = bpy.data.meshes.new('Landing.Foreground')
-bm.to_mesh(me)
-bm.free()
-for p in me.polygons:
-    p.use_smooth = True
-me.materials.append(FG)
-link('Landing.Foreground', me)
-
-# Dew drops beading on the lily pads: glossy beads the low sun glints in (their own material, 'Dew', on the site).
+# Pebbles: pale, speckled and wet, heaped in the bottom right (out of focus, close to the camera) and one or two by
+# the reeds.
+STONE = Color((0.86, 0.76, 0.66))
+STONE_WARM = Color((0.78, 0.6, 0.48))
 bm = bmesh.new()
-for i in range(70):
-    a = rnd.uniform(0, 6.28)
-    d = rnd.uniform(0.05, 0.38)
-    centre = FROG_PAD + Vector((math.cos(a) * d, math.sin(a) * d, 0.012))
-    if (centre.xy - frog_at.xy).length < 0.16:
-        continue
-    size = rnd.uniform(0.003, 0.01)
-    geom = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=size)
+col = bm.loops.layers.color.new('Col')
+for px, py, half in ((1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95), (1405, 905, 90), (1525, 880, 60),
+                     (930, 1015, 95), (1355, 1015, 105), (1180, 885, 55), (1050, 905, 42), (1530, 985, 75), (1280, 880, 40)):
+    contact = at(px, py)
+    r = px_size(contact, half)
+    centre = contact + Vector((0, 0, r * 0.25))
+    tone = rnd.uniform(0, 1)
+    geom = bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=1)
+    squash = rnd.uniform(0.55, 0.75)
     for v in geom['verts']:
-        v.co.z *= 0.6
-        v.co += centre + Vector((0, 0, size * 0.4))
+        v.co = Vector((v.co.x * r * rnd.uniform(1.0, 1.0), v.co.y * r * 0.85, v.co.z * r * squash))
+        v.co += v.co.normalized() * noise.noise(v.co * 4 / r + centre) * r * 0.06
+        v.co += centre
+    colour_faces(bm, geom['verts'], col, lambda co, t=tone: mix(STONE, STONE_WARM, t * 0.6))
+finish('Landing.Pebbles', bm, material('Pebble', 0.35))
+
+# Dew: beads on the pads, a few big ones as in the reference, glinting in the low sun ('Dew' on the site).
+bm = bmesh.new()
+for centre, r in pad_centres:
+    for i in range(int(10 + 70 * min(r, 1.0))):
+        a = rnd.uniform(0, 6.28)
+        d = r * math.sqrt(rnd.uniform(0.02, 0.85))
+        spot = centre + Vector((math.cos(a) * d, math.sin(a) * d, 0.0))
+        if (spot.xy - FROG_BASE.xy).length < 0.12 * FROG_SIZE * 1.4:
+            continue
+        size = r * rnd.choice((0.005, 0.007, 0.01, 0.014, 0.02, 0.035))
+        geom = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=size)
+        for v in geom['verts']:
+            v.co.z *= 0.55
+            v.co += spot + Vector((0, 0, size * 0.35 + 0.005))
 me = bpy.data.meshes.new('Landing.Dew')
 bm.to_mesh(me)
 bm.free()

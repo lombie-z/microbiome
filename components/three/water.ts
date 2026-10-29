@@ -22,6 +22,8 @@ export type WaterKind = 'falling' | 'still' | 'pool';
 
 /** Shared clock for every water material; advance it once a frame. */
 export const waterTime = { value: 0 };
+/** How far into the landing the camera is (lib/journey.ts landingAt): the braid there gives way to the white curtain. */
+export const waterLanding = { value: 0 };
 
 export function waterMaterial(kind: WaterKind): Material {
   // The pool lies flat under the low sun: a softer sheen there, or the sun's reflection blooms into a glare.
@@ -40,6 +42,7 @@ export function waterMaterial(kind: WaterKind): Material {
   material.defines = { [kind.toUpperCase()]: '' };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = waterTime;
+    shader.uniforms.uLanding = waterLanding;
     shader.uniforms.uDeep = { value: DEEP };
     shader.uniforms.uMid = { value: MID };
     shader.uniforms.uPale = { value: PALE };
@@ -74,6 +77,7 @@ vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`
         '#include <common>',
         `#include <common>
 uniform float uTime;
+uniform float uLanding;
 uniform vec3 uDeep;
 uniform vec3 uMid;
 uniform vec3 uPale;
@@ -103,7 +107,8 @@ ${NOISE}`
   white = max(streak, vFoam * churn);
   // The big fall turns white as it drops: aerated water, as in a real fall.
   // Below the braid it's a white, streaming curtain: fine vertical streaks racing down, nearly opaque.
-  float aerated = smoothstep(-5.0, -8.0, vWorld.y) * vFlow;
+  // At the landing the whole fall is aerated: one white curtain from the top of the frame (the braid behind it).
+  float aerated = max(smoothstep(-5.0, -8.0, vWorld.y), uLanding) * vFlow;
   float fine = waterNoise(vec2(vFlowUv.x * 40.0, (along - uTime * 2.6) * 0.6)) * 0.7 + waterNoise(vec2(vFlowUv.x * 110.0, (along - uTime * 3.4) * 1.5)) * 0.3;
   float streaks = smoothstep(0.32, 0.68, fine);
   white = max(white, aerated * streaks);
@@ -120,7 +125,7 @@ ${NOISE}`
   diffuseColor.a = mix(mix(0.95, 0.85, vFlow), 1.0, white) * vFade;
 #ifdef FALLING
   // The streak particles (components/three/fall-streaks.tsx) carry the curtain; the mesh is a faint sheet behind.
-  diffuseColor.a *= mix(1.0, mix(0.2, 0.45, streaks), aerated);
+  diffuseColor.a *= mix(1.0, mix(0.2, 0.45, streaks), aerated) * (1.0 - 0.6 * uLanding);
   // Sunlit streaks glow past white, so the bloom gives the curtain its luminous edge.
   totalEmissiveRadiance += vec3(1.0, 0.95, 0.88) * aerated * streaks * 0.45;
   // Ragged, broken edges where the curtain is seen edge-on: it frays into separate streams rather than ending in a

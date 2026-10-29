@@ -19,12 +19,14 @@ import {
 } from 'three';
 import { BEATS, journey, landingAt, smoothstep } from '@/lib/journey';
 import { FallStreaks } from './fall-streaks';
+import { Foliage } from './foliage';
+import { landingMaterial } from './landing';
 import { rockMaterial } from './rock';
 import { SilhouetteOutline } from './silhouette-outline';
 import { bloomAt, SUN_POSITION } from './sky';
 import { Spray } from './spray';
 import { useStudioReflections } from './studio-environment';
-import { waterMaterial, waterTime } from './water';
+import { waterLanding, waterMaterial, waterTime } from './water';
 
 export const DRACO_PATH = '/draco/';
 const URL = '/models/micro-biome.glb';
@@ -72,26 +74,6 @@ function whiteoutCloud(source: Material) {
     );
   };
   material.customProgramCacheKey = () => 'whiteout-cloud';
-  return material;
-}
-
-/** The landing's foreground: reeds and grass blades sway in a breeze (everything else there sits low and stays put). */
-function swaying(source: MeshPhysicalMaterial) {
-  const material = source.clone();
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uTime = waterTime;
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace(
-      '#include <begin_vertex>',
-      `#include <begin_vertex>
-// The reed bed (art/build-landing.py) sits round x -24.4, z 4.0; the taller a point, the further it moves.
-float reeds = 1.0 - smoothstep(1.4, 2.4, length(transformed.xz - vec2(-24.4, 4.0)));
-float h = max(transformed.y + 11.0, 0.0);
-float sway = reeds * h * h * 0.035;
-transformed.x += sway * sin(uTime * 1.3 + transformed.x * 2.0 + transformed.z * 3.0);
-transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`
-    );
-  };
-  material.customProgramCacheKey = () => 'swaying-foreground';
   return material;
 }
 
@@ -150,12 +132,13 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       // half-float buffer (Inf), which the bloom turns into black specks. A floor on roughness keeps them finite.
       if (own.isMeshStandardMaterial) own.roughness = Math.max(own.roughness, 0.12);
       if (own.isMeshPhysicalMaterial) own.clearcoatRoughness = Math.max(own.clearcoatRoughness, 0.12);
-      if (name === 'Water') mesh.material = still;
+      const landing = landingMaterial(own);
+      if (landing) mesh.material = landing;
+      else if (name === 'Water') mesh.material = still;
       else if (name === 'Pool' || name === 'Splash') {
         // The lake is drawn by <Lake> (a reflector); the spray particles stand in for Blender's splash beads.
         mesh.visible = false;
-      } else if (own.name === 'Foreground') mesh.material = swaying(own);
-      else if (own.name === 'Canyon') mesh.material = rockMaterial(own);
+      } else if (own.name === 'Canyon') mesh.material = rockMaterial(own);
       else if (own.name === 'Dew') {
         // Beads of water on the lily pads: clear and glossy, so the low sun glints in them.
         mesh.material = new MeshPhysicalMaterial({
@@ -196,6 +179,8 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       }
     });
   }, [scene]);
+
+  const canyon = useMemo(() => scene.getObjectByName('LandingCanyon') as Mesh | undefined, [scene]);
 
   const animated = useMemo(() => {
     const list: Animated[] = [];
@@ -264,6 +249,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     // The studio lights give way to the warm sun (components/three/sky.tsx): partly below the clouds, almost wholly at
     // the landing, where the light should be low, warm and contrasty.
     const landing = landingAt(journey.frame);
+    waterLanding.value = landing;
     if (key.current) key.current.intensity = (1.8 - 0.7 * bloomAt(journey.frame)) * (1 - 0.85 * landing);
     if (hemi.current) hemi.current.intensity = 0.9 - 0.5 * landing;
     // The clay clouds belong to the toy world above; they fade as the camera reaches the real one.
@@ -319,6 +305,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
       <primitive object={scene} />
       {!(process.env.NODE_ENV === 'development' && window.location.search.includes('nospray')) && <Spray scene={scene} />}
       <FallStreaks />
+      {canyon && <Foliage canyon={canyon} />}
       <SilhouetteOutline target={scene} exclude={isOutsideOutline} depthAt={OUTLINE_DEPTH} fade={outlineFade} />
     </>
   );

@@ -43,8 +43,8 @@ SHOTS = [
     (610, Vector((-6.0, 0.4, -9.4)), Vector((0.0, 0.0, -6.8)), 48.0),
     (690, Vector((-15.0, -1.2, -10.2)), Vector((0.0, -0.6, -8.0)), 42.0),
     # The landing (art/build-landing.py): eye level on the lake, the frog close, the fall and cliffs beyond.
-    (760, Vector((-27.0, -2.5, -10.55)), Vector((0.0, -1.4, -9.2)), 38.0),
-    (800, Vector((-27.2, -2.55, -10.5)), Vector((0.0, -1.4, -9.15)), 38.0),
+    (760, Vector((-27.0, -2.5, -10.55)), Vector((0.0, 3.4, -9.2)), 38.0),  # the fall right of centre, as the reference
+    (800, Vector((-27.2, -2.55, -10.5)), Vector((0.0, 3.4, -9.15)), 38.0),
     # Rise and pull right back: the canyon, the lake, and the tiny clay biome floating high above it all.
     (860, Vector((-31.0, -9.0, -6.0)), Vector((-2.0, 0.0, -8.0)), 40.0),
     (920, Vector((-42.0, -30.0, 8.0)), Vector((-2.0, 0.0, -5.0)), 40.0),

@@ -3,7 +3,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
 import { BufferAttribute, BufferGeometry, Color, type Mesh, type Object3D, ShaderMaterial, Vector3 } from 'three';
-import { isLightDevice } from '@/lib/journey';
+import { isLightDevice, journey, landingAt } from '@/lib/journey';
 
 // Spray and mist as GPU particles. Each particle loops through its own short life: it starts at aStart, moves with
 // aVelocity under gravity, and fades in and out. One material, tuned per system.
@@ -136,6 +136,12 @@ const FOOT_X = 0.45;
 const FOOT_Z = 1.15;
 const BRAID_Y = -6.5;
 
+/** Marks a system that only shows at the landing (it fades in with it, in Spray's frame loop). */
+function landingOnly(system: ReturnType<typeof particles>) {
+  system.material.userData.landing = true;
+  return system;
+}
+
 export function Spray({ scene }: { scene: Object3D }) {
   const systems = useMemo(() => {
     const share = isLightDevice() ? 0.45 : 1;
@@ -193,6 +199,25 @@ export function Spray({ scene }: { scene: Object3D }) {
           return { life: 6 + Math.random() * 5, size: 2 + Math.random() * 2.5 };
         },
       }),
+      // At the landing: a bank of mist rolling off the fall's foot and along the cliffs' base, lit by the low sun (the
+      // reference's great white billows). Only visible from afar, so it fades in with the landing.
+      landingOnly(
+        particles({
+          count: Math.round(260 * share),
+          gravity: 0,
+          color: '#fff3e6',
+          opacity: 0,
+          softness: 1,
+          emit: (_, start, velocity) => {
+            // Thickest at the fall's foot, thinning out along the cliffs (mostly toward the sun, -z).
+            const along = (Math.random() < 0.7 ? -1 : 0.6) * Math.random() ** 1.8 * 9;
+            const height = Math.random() ** 2.5 * 3.4 * (1 - Math.abs(along) / 12);
+            start.set(-1.2 + Math.random() * 2.8, POOL_Y + 0.2 + height, along);
+            velocity.set((Math.random() - 0.5) * 0.12, 0.08 + Math.random() * 0.12, (Math.random() - 0.5) * 0.25);
+            return { life: 9 + Math.random() * 6, size: 1.6 + Math.random() * 2.4 };
+          },
+        })
+      ),
       // A softer haze where the streams braid into one.
       particles({
         count: 40,
@@ -214,6 +239,8 @@ export function Spray({ scene }: { scene: Object3D }) {
   useFrame((state) => {
     for (const { material } of systems) {
       material.uniforms.uTime.value = state.clock.elapsedTime;
+      // The landing's mist bank (opacity 0 at rest) fades in as the camera arrives.
+      if (material.userData.landing) material.uniforms.uOpacity.value = 0.3 * landingAt(journey.frame);
       material.uniforms.uScale.value = state.size.height * state.viewport.dpr * 0.5;
     }
   });

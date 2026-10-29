@@ -51,7 +51,10 @@ export function rockMaterial(source: MeshStandardMaterial) {
   // Pinker and creamier than the base, less orange (as the reference's rock).
   vec3 tint = mix(vec3(1.02, 0.88, 0.92), vec3(1.06, 0.98, 0.92), smoothstep(0.35, 0.65, hue));
   tint = mix(tint, vec3(0.94, 0.8, 0.9), smoothstep(0.55, 0.8, rFbm(p * 1.1 + 2.0)) * 0.6);
-  diffuseColor.rgb *= tint * mix(0.62, 1.08, smoothstep(-0.4, 0.5, h)) ;
+  diffuseColor.rgb *= tint * mix(0.62, 1.08, smoothstep(-0.4, 0.5, h));
+  // Paler and less orange than the vertex colours: the reference's rock is a sunlit pink-cream.
+  float luma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+  diffuseColor.rgb = mix(vec3(luma), diffuseColor.rgb, 0.62) * vec3(1.08, 1.0, 1.02) + 0.04;
   // Moss and small plants on ledges and the gentler slopes, in patches, and hanging down the faces in streaks.
   float ledge = smoothstep(0.55, 0.85, vRockNormal.y) * smoothstep(0.35, 0.6, rFbm(p * 1.6 + 11.0));
   float hanging = steep * smoothstep(0.58, 0.72, rFbm(vec3(p.x * 0.9, p.y * 0.35, p.z * 0.9) + 31.0));

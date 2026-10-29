@@ -20,11 +20,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   // its clouds and the sun its halo.
   g = g * (1.0 + g / 9.0) / (1.0 + g);
   // Contrast as an S-curve in perceptual space, so it deepens shadows without blowing highlights.
-  vec3 p = pow(g, vec3(1.0 / 2.2));
+  vec3 p = pow(min(g, vec3(1.0)), vec3(1.0 / 2.2));
   p = mix(p, p * p * (3.0 - 2.0 * p), contrast - 1.0);
   g = pow(max(p, vec3(0.0)), vec3(2.2));
   float l = dot(g, vec3(0.2126, 0.7152, 0.0722));
-  g = mix(vec3(l), g, saturation);
+  // Saturating past 1 can push a channel below zero, and the output's sRGB encode turns that into NaN (white).
+  g = max(mix(vec3(l), g, saturation), vec3(0.0));
   g *= mix(shadowTint, highlightTint, smoothstep(0.02, 0.5, l));
   outputColor = vec4(mix(c, g, weight), inputColor.a);
 }`;
@@ -35,11 +36,11 @@ export class GradeEffect extends Effect {
       blendFunction: BlendFunction.NORMAL,
       uniforms: new Map<string, Uniform>([
         ['weight', new Uniform(0)],
-        ['exposure', new Uniform(1.12)],
-        ['contrast', new Uniform(1.55)],
-        ['saturation', new Uniform(1.08)],
-        ['shadowTint', new Uniform(new Vector3(1.06, 0.88, 0.95))],
-        ['highlightTint', new Uniform(new Vector3(1.05, 0.97, 0.86))],
+        ['exposure', new Uniform(0.78)],
+        ['contrast', new Uniform(1.85)],
+        ['saturation', new Uniform(1.4)],
+        ['shadowTint', new Uniform(new Vector3(1.1, 0.86, 0.86))],
+        ['highlightTint', new Uniform(new Vector3(1.08, 0.96, 0.8))],
       ]),
     });
   }

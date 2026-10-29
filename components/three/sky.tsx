@@ -16,7 +16,7 @@ const CLOUD_LIT = new Color('#ffd6a6');
 const CLOUD_SHADE = new Color('#c48fa3');
 const WARM_LIGHT = new Color('#ffcba3');
 /** Where the sun sits (art/build-sky.py), in three.js space (y up). */
-export const SUN_POSITION = new Vector3(55, 9, -34);
+export const SUN_POSITION = new Vector3(47.6, 7.4, -47.4);
 const LANDING_LIGHT = new Vector3(-20, 16, -42);
 
 /** 0 above the clouds, 1 once the sun is fully out. */
