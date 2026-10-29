@@ -127,7 +127,8 @@ void main() {
     float blueness = (photo.b - 0.5 * (photo.r + photo.g)) / lin;
     float cloud = 1.0 - smoothstep(0.12, 0.45, blueness);
     float k = smoothstep(0.4, 0.92, l);
-    vec3 gap = mix(vec3(0.84, 0.7, 0.86), vec3(1.0, 0.8, 0.74), smoothstep(0.0, 0.25, 0.3 - d.y)) * (0.72 + 0.3 * l);
+    // Lavender overhead, warming to peach and gold toward the horizon and the sun.
+    vec3 gap = mix(vec3(0.84, 0.7, 0.86), vec3(1.05, 0.8, 0.6), smoothstep(0.0, 0.4, 0.45 - d.y) * (0.6 + 0.4 * pow(toward, 2.0))) * (0.72 + 0.3 * l);
     vec3 body = mix(vec3(0.7, 0.45, 0.52), vec3(1.3, 0.86, 0.62), k) * (0.6 + 0.8 * k);
     // Toward the sun everything warms to peach and orange: the clouds blaze, the gaps go gold.
     float near = pow(toward, 3.0);
