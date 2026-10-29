@@ -1,4 +1,3 @@
-import { IntroCaption } from '@/components/intro-caption';
 import { Journey } from '@/components/journey';
 
 export default function Home() {
@@ -6,7 +5,6 @@ export default function Home() {
     <main>
       <h1 className="sr-only">Microbiome</h1>
       <Journey />
-      <IntroCaption />
       {/* The scroll track the camera journey runs along. */}
       <div className="relative z-10 h-[600svh]" />
     </main>

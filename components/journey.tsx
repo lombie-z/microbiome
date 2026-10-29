@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
 import { ProductOverlay } from '@/components/product-overlay';
 import { SmoothScroll } from '@/components/smooth-scroll';
+import { Ticket } from '@/components/ticket';
 import { cn } from '@/lib/utils';
 
 // three.js and the model load in the browser after the page is up; the overlay holds the hero still until then.
@@ -25,6 +26,7 @@ export function Journey() {
       <JourneyCanvas onReady={onReady} onProgress={onProgress} />
       {ready && <SmoothScroll />}
       {ready && <ProductOverlay />}
+      {ready && <Ticket />}
       {/* Loading: the hero as a Blender still (same box as the live hero, lib/journey.ts heroStageSize), with a hairline
           of progress; it all fades away once the model is in and its shaders are ready. */}
       <div

@@ -22,8 +22,24 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   vec2 centre = (id + 0.5) * cell / resolution;
   // Along the diagonal, bottom-left (0) to top-right (1), measured at the cell, jittered so the edge is ragged.
   float along = (centre.x + centre.y) * 0.5;
-  float edge = progress * 1.3 - 0.15 + (cellHash(id) - 0.5) * 0.12;
-  outputColor = along < edge ? texture2D(inputBuffer, centre) : inputColor;
+  float jitter = (cellHash(id) - 0.5) * 0.12;
+  float edge = progress * 1.3 - 0.15 + jitter;
+  if (along >= edge) {
+    outputColor = inputColor;
+    return;
+  }
+  vec3 c = texture2D(inputBuffer, centre).rgb;
+  // A band of glowing colour riding the wave's front, so the change is unmistakable: gold-white at the leading edge,
+  // through rose to violet, cells flickering in and out of it.
+  float behind = (edge - along) / 0.12;
+  if (behind < 1.0 && progress < 1.0) {
+    vec3 band = behind < 0.3 ? mix(vec3(1.0, 0.78, 0.32), vec3(0.98, 0.3, 0.55), behind / 0.3)
+                             : mix(vec3(0.98, 0.3, 0.55), vec3(0.45, 0.3, 0.92), (behind - 0.3) / 0.7);
+    float flicker = step(0.25, fract(cellHash(id + floor(time * 14.0)) + behind * 0.5));
+    float strength = (1.0 - smoothstep(0.5, 1.0, behind)) * mix(0.6, 1.0, flicker);
+    c = mix(c, band * (0.9 + 0.4 * (1.0 - behind)), strength * 0.95);
+  }
+  outputColor = vec4(c, inputColor.a);
 }`;
 
 export class PixelSweepEffect extends Effect {
