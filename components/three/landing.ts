@@ -105,7 +105,7 @@ export function landingMaterial(source: MeshStandardMaterial): Material | null {
   switch (source.name) {
     case 'Reed':
       // Blades: wet and glossy (they reflect the landing itself, its captured surroundings: see landingReflections),
-      // and a little see-through.
+      // and a touch see-through.
       return physical(
         source,
         { roughness: 0.45, sheen: 0.6, sheenColor: source.color.clone().setRGB(1, 0.85, 0.5), side: DoubleSide, transparent: true },
@@ -124,7 +124,7 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
           // Blades olive rather than spring green (the grade's vibrance lifts them).
           colour:
             // (Heads: speckled tan and dark brown, as packed seed fibres.)
-            'if (diffuseColor.g > diffuseColor.r) { diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); diffuseColor.a = 0.8; } else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
+            'if (diffuseColor.g > diffuseColor.r) { diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); diffuseColor.a = 0.9; } else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
           // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades gentle undulations, so their
           // reflections break up along them as on a real leaf.
           normal: BUMP(
