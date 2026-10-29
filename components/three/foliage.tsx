@@ -66,6 +66,7 @@ attribute float aFlip;
 attribute float aShade;
 varying vec2 vUv;
 varying float vShade;
+varying float vPink;
 #include <fog_pars_vertex>
 void main() {
   // Upright cards turned to the camera round the vertical, standing on their base.
@@ -78,6 +79,7 @@ void main() {
   vec2 cellUv = vec2(mix(uv.x, 1.0 - uv.x, aFlip), uv.y);
   vUv = (vec2(mod(aCell, 3.0), 2.0 - floor(aCell / 3.0)) + cellUv) / 3.0;
   vShade = aShade;
+  vPink = aCell >= 3.0 && aCell < 6.0 ? 1.0 : 0.0;
   #include <fog_vertex>
 }`;
 
@@ -85,11 +87,19 @@ const treeFragment = /* glsl */ `
 uniform sampler2D uAtlas;
 varying vec2 vUv;
 varying float vShade;
+varying float vPink;
 #include <fog_pars_fragment>
 void main() {
   vec4 tex = texture2D(uAtlas, vUv);
   if (tex.a < 0.45) discard;
-  gl_FragColor = vec4(tex.rgb * vShade, 1.0);
+  // The renders came out dark (scanned leaves are dark, and the sprites were lit for a dim sky): lift them to the
+  // landing's sunlit greens, and turn the blossom variant properly pink, keeping its light and shade.
+  vec3 c = tex.rgb * 3.0 * vec3(1.05, 1.0, 0.85);
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  // Greener foliage (the scans' leaves render olive-brown here), lit from within at the bright edges.
+  c = mix(c, vec3(0.5, 0.72, 0.28) * (0.25 + 1.4 * l), (1.0 - vPink) * 0.55);
+  c = mix(c, vec3(1.0, 0.5, 0.52) * (0.35 + 1.5 * l), vPink * 0.92);
+  gl_FragColor = vec4(c * vShade, 1.0);
   #include <fog_fragment>
   #include <colorspace_fragment>
 }`;
