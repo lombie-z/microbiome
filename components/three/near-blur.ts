@@ -51,6 +51,10 @@ export class NearBlurEffect extends Effect {
     });
   }
 
+  set radius(value: number) {
+    (this.uniforms.get('maxRadius') as Uniform<number>).value = value;
+  }
+
   set weight(value: number) {
     (this.uniforms.get('weight') as Uniform<number>).value = value;
   }

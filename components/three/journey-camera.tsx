@@ -4,7 +4,7 @@ import { PerspectiveCamera } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
 import { MathUtils, type PerspectiveCamera as PerspectiveCameraImpl, Quaternion, Vector3 } from 'three';
-import { BEATS, heroStageSize, journey, journeyProgress, TRACK_FRAMES } from '@/lib/journey';
+import { BEATS, heroStageSize, journey, journeyProgress, PRE_ROLL, TRACK_FRAMES } from '@/lib/journey';
 
 // The hero matches the blog's biome view (and the Blender preview camera): three-quarter, 3.7 units across the stage.
 // A long lens from far away stands in for the blog's orthographic camera, so the journey can widen it.
@@ -75,7 +75,9 @@ export function JourneyCamera() {
     let fov = HERO_FOV;
 
     const frames = track.current;
-    const p = journeyProgress();
+    const scroll = journeyProgress();
+    journey.sweep = Math.min(1, scroll / PRE_ROLL);
+    const p = Math.max(0, (scroll - PRE_ROLL) / (1 - PRE_ROLL));
     journey.frame = p * TRACK_FRAMES;
     if (frames) {
       const trackFov = sample(frames, p, trackPosition, trackQuaternion);

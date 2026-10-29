@@ -3,14 +3,14 @@
 import { useEffect, useRef } from 'react';
 import { journey, smoothstep } from '@/lib/journey';
 
-/** The hero's caption: pinned to the bottom of the screen, it fades as soon as the camera starts to move. */
+/** The hero's caption: pinned to the bottom of the screen, it fades as soon as you scroll. */
 export function IntroCaption() {
   const root = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (root.current) root.current.style.opacity = (1 - smoothstep(4, 40, journey.frame)).toFixed(3);
+      if (root.current) root.current.style.opacity = (1 - Math.max(smoothstep(0.1, 0.6, journey.sweep), smoothstep(4, 40, journey.frame))).toFixed(3);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

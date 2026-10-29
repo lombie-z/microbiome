@@ -32,6 +32,25 @@ export const BEATS = {
 export const journey = {
   /** Current track frame (0 to TRACK_FRAMES), smoothed by Lenis. */
   frame: 0,
+  /** The pixel sweep over the hero before the camera moves (0 to 1; see PRE_ROLL). */
+  sweep: 0,
+};
+
+/**
+ * The scroll's first stretch (a share of the whole) holds the camera on the hero while a pixel sweep runs over it
+ * (pixel mode, components/three/pixel-sweep.ts); the camera's journey runs over the rest.
+ */
+export const PRE_ROLL = 0.06;
+
+/**
+ * Pixel mode: the scene drawn at 1/PIXEL of the screen's resolution and scaled up with hard pixel edges, once the
+ * sweep has run: the look, and far cheaper to draw. ?pixel=N picks the cell size; ?pixel=1 turns it off.
+ */
+export const pixelSize = () => {
+  if (typeof window === 'undefined') return 4;
+  const param = new URLSearchParams(window.location.search).get('pixel');
+  const n = param === null ? 4 : Number(param);
+  return n > 1 ? n : 0;
 };
 
 export const smoothstep = (edge0: number, edge1: number, x: number) => {

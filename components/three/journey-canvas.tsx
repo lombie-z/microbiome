@@ -4,7 +4,7 @@ import { PerformanceMonitor, SoftShadows, useProgress } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber';
 import { type RefObject, Suspense, useEffect, useRef, useState } from 'react';
 import type { Mesh } from 'three';
-import { devFlag as flag, isLightDevice, journey } from '@/lib/journey';
+import { devFlag as flag, isLightDevice, journey, pixelSize } from '@/lib/journey';
 import { Biome } from './biome';
 import { Effects } from './effects';
 import { JourneyCamera } from './journey-camera';
@@ -69,21 +69,25 @@ function Expose() {
 }
 
 /**
- * Trying a pixel-art look: ?pixel=N renders the scene at 1/N of the screen's resolution and scales it up with hard
- * pixel edges. Far cheaper to draw (every pass scales with pixel count); off unless asked for.
+ * Pixel mode's resolution switch: the full-resolution render while the hero's crisp and the sweep runs over it, the
+ * low one (1/pixel) once the sweep covers the screen and looks the same; back when scrolling up into the hero.
  */
-const pixelSize = () => {
-  if (typeof window === 'undefined') return 0;
-  const n = Number(new URLSearchParams(window.location.search).get('pixel'));
-  return n > 1 ? n : 0;
-};
+function PixelSwitch({ pixel, dpr, full, setDpr }: { pixel: number; dpr: number; full: number; setDpr: (dpr: number) => void }) {
+  useFrame(() => {
+    const low = 1 / pixel;
+    if (dpr !== low && journey.sweep >= 0.999) setDpr(low);
+    else if (dpr === low && journey.sweep < 0.98) setDpr(full);
+  });
+  return null;
+}
 
 export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => void; onProgress: (progress: number) => void }) {
   const [sun, setSun] = useState<Mesh | null>(null);
   const [light] = useState(isLightDevice);
-  // Resolution adapts to the machine: down toward 1 while frames are slow, back up (to the cap) when there's room.
   const [pixel] = useState(pixelSize);
-  const maxDpr = pixel ? 1 / pixel : light ? 1.5 : 1.75;
+  // Resolution adapts to the machine: down toward 1 while frames are slow, back up (to the cap) when there's room. (In
+  // pixel mode the hero's drawn at this and everything after at 1/pixel; see PixelSwitch.)
+  const maxDpr = light ? 1.5 : 1.75;
   const [dpr, setDpr] = useState(maxDpr);
   const wanted = useRef(maxDpr);
   return (
@@ -92,7 +96,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
       flat
       dpr={dpr}
       gl={{ antialias: false }}
-      style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, imageRendering: pixel ? 'pixelated' : undefined }}
+      style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, imageRendering: dpr < 1 ? 'pixelated' : undefined }}
     >
       <PerformanceMonitor
         bounds={(refresh) => (refresh > 90 ? [50, 90] : [40, 58])}
@@ -101,7 +105,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
           wanted.current = Math.round((1 + (maxDpr - 1) * factor) * 4) / 4;
         }}
       />
-      <ApplyWhenStill wanted={wanted} dpr={dpr} setDpr={setDpr} />
+      {pixel ? <PixelSwitch pixel={pixel} dpr={dpr} full={maxDpr} setDpr={setDpr} /> : <ApplyWhenStill wanted={wanted} dpr={dpr} setDpr={setDpr} />}
       <ShadowBudget />
       {!flag('nosoft') && <SoftShadows size={42} samples={light ? 6 : 10} focus={0.35} />}
       <Progress onProgress={onProgress} />
@@ -112,7 +116,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
       <Suspense fallback={null}>
         <Biome onReady={onReady} onSun={setSun} />
       </Suspense>
-      {flag('nofx') ? <Render /> : <Effects sun={light ? null : sun} />}
+      {flag('nofx') ? <Render /> : <Effects sun={light ? null : sun} pixel={pixel} />}
     </Canvas>
   );
 }

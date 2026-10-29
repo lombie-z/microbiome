@@ -294,9 +294,8 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
         gl.setRenderTarget(previous);
         target.dispose();
         // The prefiltering shaders the landing's reflection capture uses (components/three/landing-reflections.ts).
-        const pmrem = new PMREMGenerator(gl);
-        pmrem.compileCubemapShader();
-        pmrem.dispose();
+        // (Kept, not disposed: its programs are still compiling in the background, and they're shared by program cache.)
+        new PMREMGenerator(gl).compileCubemapShader();
         restore();
         requestAnimationFrame(() => requestAnimationFrame(() => live && onReady()));
         // rAF doesn't run in a hidden tab; report anyway so it's ready when the tab comes back.

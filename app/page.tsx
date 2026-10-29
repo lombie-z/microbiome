@@ -8,7 +8,7 @@ export default function Home() {
       <Journey />
       <IntroCaption />
       {/* The scroll track the camera journey runs along. */}
-      <div className="relative z-10 h-[560svh]" />
+      <div className="relative z-10 h-[600svh]" />
     </main>
   );
 }

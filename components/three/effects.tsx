@@ -2,12 +2,21 @@
 
 import { useFrame } from '@react-three/fiber';
 import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, SMAA, Vignette } from '@react-three/postprocessing';
-import { BlendFunction, type BloomEffect, type DepthOfFieldEffect, type GodRaysEffect, type NoiseEffect, type VignetteEffect } from 'postprocessing';
+import {
+  BlendFunction,
+  type BloomEffect,
+  type DepthOfFieldEffect,
+  type GodRaysEffect,
+  type NoiseEffect,
+  type SMAAEffect,
+  type VignetteEffect,
+} from 'postprocessing';
 import { useRef } from 'react';
 import { type Mesh, ShaderChunk, type Sphere, Vector3 } from 'three';
 import { devFlag, journey, landingAt, smoothstep } from '@/lib/journey';
 import { Grade, type GradeEffect } from './grade';
 import { NearBlur, type NearBlurEffect } from './near-blur';
+import { PixelSweep, type PixelSweepEffect } from './pixel-sweep';
 import { bloomAt, SUN_POSITION } from './sky';
 
 const sunOnScreen = new Vector3();
@@ -25,7 +34,7 @@ gl_FragColor.rgb = min(gl_FragColor.rgb, vec3(16.0));`;
  * The finish: bloom on anything brighter than white (the sun, glints and white water), light rays from the sun, and
  * a little vignette and grain once the journey is under way. The hero has none of it, so it matches the blog.
  */
-export function Effects({ sun }: { sun: Mesh | null }) {
+export function Effects({ sun, pixel }: { sun: Mesh | null; pixel: number }) {
   const vignette = useRef<VignetteEffect>(null);
   const grain = useRef<NoiseEffect>(null);
   const grade = useRef<GradeEffect>(null);
@@ -33,6 +42,8 @@ export function Effects({ sun }: { sun: Mesh | null }) {
   const rays = useRef<GodRaysEffect>(null);
   const focus = useRef<DepthOfFieldEffect>(null);
   const bloomFx = useRef<BloomEffect>(null);
+  const sweep = useRef<PixelSweepEffect>(null);
+  const smaa = useRef<SMAAEffect>(null);
 
   useFrame((state) => {
     const underway = smoothstep(10, 120, journey.frame);
@@ -65,7 +76,13 @@ export function Effects({ sun }: { sun: Mesh | null }) {
     // Gentler rays at the landing: full strength they wash the sky's clouds out round the sun.
     // The landing's lens: sharp from the frog out past the lilies (the focus is centred mid-way, its range wide, since
     // the blur is symmetric about it), the far valley, mountains and cliffs going soft (the reference's depth of field). Off everywhere else.
-    if (focus.current) focus.current.bokehScale = 1.8 * landingAt(journey.frame);
+    // The blurs are measured in buffer pixels: at pixel mode's low resolution each covers far more of the screen, so
+    // they're scaled down to look the same.
+    const scale = Math.min(1, state.gl.getPixelRatio() / 1.75);
+    if (focus.current) focus.current.bokehScale = 1.8 * landingAt(journey.frame) * Math.max(scale, 0.35);
+    if (sweep.current) sweep.current.set(pixel ? journey.sweep : 0, pixel * state.gl.getPixelRatio());
+    // (No edge smoothing once it's pixels: they should stay crisp.)
+    if (smaa.current) smaa.current.blendMode.opacity.value = state.gl.getPixelRatio() < 1 ? 0 : 1;
     // A livelier bloom at the landing: more of the bright scene glows (glints, lit rims, the fall, the mist).
     if (bloomFx.current) {
       bloomFx.current.luminanceMaterial.threshold = 1.1 - 0.2 * arrived;
@@ -73,7 +90,10 @@ export function Effects({ sun }: { sun: Mesh | null }) {
     }
     if (rays.current) rays.current.godRaysMaterial.weight = 0.6 * (1 - 0.85 * landingAt(journey.frame));
     // The shallow focus is the landing's still shot.
-    if (nearBlur.current) nearBlur.current.weight = landingAt(journey.frame);
+    if (nearBlur.current) {
+      nearBlur.current.weight = landingAt(journey.frame);
+      nearBlur.current.radius = 14 * Math.max(scale, 0.3);
+    }
   });
 
   // No multisampling (4x MSAA on every half-float buffer was the single biggest cost); SMAA smooths edges instead.
@@ -86,7 +106,8 @@ export function Effects({ sun }: { sun: Mesh | null }) {
       <Grade ref={grade} />
       <Vignette ref={vignette} offset={0.35} darkness={0} />
       <Noise ref={grain} premultiply blendFunction={BlendFunction.SOFT_LIGHT} opacity={0} />
-      <SMAA />
+      <SMAA ref={smaa} />
+      <PixelSweep ref={sweep} />
     </EffectComposer>
   );
 }
