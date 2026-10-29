@@ -21,7 +21,7 @@ const LakeShader = {
     textureMatrix: { value: null },
     uTime: { value: 0 },
     uSun: { value: new Vector3() },
-    uDeep: { value: new Color('#5c6f86') },
+    uDeep: { value: new Color('#8a6c74') },
     uGlint: { value: new Color('#ffd9a0') },
   },
   vertexShader: /* glsl */ `

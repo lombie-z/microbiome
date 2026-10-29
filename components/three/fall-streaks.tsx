@@ -91,7 +91,8 @@ void main() {
   // Frayed sides: the ropes thin out toward the edges.
   edge *= smoothstep(0.2, 0.5, ropes + edge * 0.5);
   float a = uLanding * edge * mix(0.55, 0.9, ropes) * smoothstep(0.0, 0.04, vUv.y);
-  vec3 c = vec3(1.25, 1.2, 1.12) * mix(0.72, 1.05, ropes) * mix(1.0, 0.9, vUv.x);
+  // Deep shadowed gaps between bright ropes, as in the reference's fall.
+  vec3 c = vec3(1.25, 1.2, 1.12) * mix(0.45, 1.1, smoothstep(0.25, 0.75, ropes)) * mix(1.0, 0.88, vUv.x);
   gl_FragColor = vec4(c, a);
   #include <colorspace_fragment>
 }`;

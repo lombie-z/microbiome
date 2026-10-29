@@ -57,6 +57,8 @@ float h = max(transformed.y + 11.0, 0.0);
 float sway = bed * h * h * 0.03;
 transformed.x += sway * sin(uTime * 1.3 + transformed.x * 2.0 + transformed.z * 3.0);
 transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
+        // Darker, duller greens than the vertex colours: the reference's reeds are mostly in shadow against the sun.
+        colour: 'diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.7) * 0.8;',
         light: BACKLIT(1.4),
       });
     case 'Pad':
