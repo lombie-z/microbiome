@@ -10,6 +10,7 @@ import { Dog } from './dog';
 import { Effects } from './effects';
 import { JourneyCamera } from './journey-camera';
 import { Lake } from './lake';
+import { Sign } from './sign';
 import { Sky } from './sky';
 
 /** Download progress (0-100) of the model and decoder, for the loading overlay. */
@@ -117,6 +118,7 @@ export default function JourneyCanvas({ onReady, onProgress }: { onReady: () => 
       <Suspense fallback={null}>
         <Biome onReady={onReady} onSun={setSun} />
         <Dog />
+        <Sign />
       </Suspense>
       {flag('nofx') ? <Render /> : <Effects sun={light ? null : sun} pixel={pixel} />}
     </Canvas>
