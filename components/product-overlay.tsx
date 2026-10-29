@@ -30,13 +30,11 @@ export function ProductOverlay() {
 
   return (
     <div ref={root} className="fixed inset-0 z-10 [--in:0]" style={{ opacity: 'var(--in)' }} inert>
-      {/* Warm and lighter toward the top, where the sun sits, so it deepens the scene rather than greying it. */}
-      <div
-        className="absolute inset-0 bg-[linear-gradient(90deg,oklch(0.24_0.05_40/0.72)_0%,oklch(0.24_0.05_40/0.42)_34%,transparent_62%)]"
-        style={{ maskImage: 'linear-gradient(to bottom, transparent, rgb(0 0 0 / 0.3) 26%, black 40%, black 85%, rgb(0 0 0 / 0.75))' }}
-      />
+      {/* Warm, and clear of the sun at the top, so it deepens the scene rather than greying it. On phones it rises from
+          the bottom instead, where the copy sits. */}
+      <div className="absolute inset-0 bg-[linear-gradient(0deg,oklch(0.24_0.05_40/0.78)_0%,oklch(0.24_0.05_40/0.5)_32%,transparent_58%)] sm:bg-[linear-gradient(90deg,oklch(0.24_0.05_40/0.72)_0%,oklch(0.24_0.05_40/0.42)_34%,transparent_62%)] sm:[mask-image:linear-gradient(to_bottom,transparent,rgb(0_0_0/0.3)_26%,black_40%,black_85%,rgb(0_0_0/0.75))]" />
       <section
-        className="relative flex h-full max-w-xl flex-col justify-center gap-6 px-6 text-plaster sm:px-12 lg:px-20"
+        className="relative flex h-full max-w-xl flex-col justify-end gap-5 px-6 pb-24 text-plaster sm:justify-center sm:gap-6 sm:px-12 sm:pb-0 lg:px-20"
         style={{ transform: 'translateY(calc((1 - var(--in)) * 16px))' }}
         aria-label="Product"
       >
