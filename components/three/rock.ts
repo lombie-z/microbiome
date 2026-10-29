@@ -26,8 +26,8 @@ float rFbm(vec3 p) {
 const PROJECTION = /* glsl */ `
   vec3 nW = normalize(vRockNormal);
   vec3 w = triWeights(nW);
-  vec3 pc = vRockPos / 3.5;
-  vec3 pf = vRockPos / 2.8 + 7.0;
+  vec3 pc = vRockPos / 11.0;
+  vec3 pf = vRockPos / 8.5 + 7.0;
   float which = smoothstep(0.4, 0.62, rFbm(vRockPos * 0.09 + 3.0));
 `;
 
@@ -74,6 +74,8 @@ ${TRIPLANAR}`
   // The scans' detail, relative to their own average colour: mostly light and shade, a little of their hue.
   vec3 detail = mix(tri(uCliffDiff, pc, w) / uCliffMean, tri(uFaceDiff, pf, w) / uFaceMean, which);
   detail = mix(vec3(dot(detail, vec3(0.2126, 0.7152, 0.0722))), detail, 0.25);
+  // Pushed past the scans' own contrast, so crevices go deep (an ambient-occlusion stand-in) and lit faces stay pale.
+  detail = pow(clamp(detail, 0.0, 2.5), vec3(1.6));
   diffuseColor.rgb *= clamp(detail, 0.0, 2.2);
   // Colour drift through peach, rose and cream, darker down in the fractures.
   float hue = rFbm(p * 0.35 + 7.0);
@@ -110,7 +112,7 @@ ${TRIPLANAR}`
   vec3 facet = normalize(cross(dFdx(vRockPos), dFdy(vRockPos)));
   if (dot(facet, nW) < 0.0) facet = -facet;
   vec3 base = normalize(mix(nW, facet, 0.5 * (1.0 - abs(nW.y))));
-  vec3 relief = normalize(mix(triNormal(uCliffNor, pc, w, base, 1.3), triNormal(uFaceNor, pf, w, base, 1.3), which));
+  vec3 relief = normalize(mix(triNormal(uCliffNor, pc, w, base, 2.2), triNormal(uFaceNor, pf, w, base, 2.2), which));
   normal = normalize((viewMatrix * vec4(relief, 0.0)).xyz);
 }`
       );

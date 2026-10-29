@@ -176,9 +176,13 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
     const counts: Record<string, number> = {};
     scene.traverse((child) => {
       if ((child as Mesh).isMesh) {
-        const sky = isSkyPart(ownerName(child));
-        child.castShadow = !sky;
-        child.receiveShadow = !sky;
+        const owner = ownerName(child);
+        const sky = isSkyPart(owner);
+        // The landing's solid things take part in the warm sun's shadows (components/three/sky.tsx); the dew, the
+        // mountains (beyond its reach) and the rest of the sky parts don't.
+        const landing = owner.startsWith('Landing') && !/Dew|Mountains/.test(owner);
+        child.castShadow = !sky || landing;
+        child.receiveShadow = !sky || landing;
       }
       const kind = classify(child.name);
       // Only animate the named object nodes, not glTF's per-primitive children.

@@ -240,6 +240,8 @@ link('Landing.Blossom', me)
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 FAR = Color((0.78, 0.6, 0.62))
+FAR_FOOT = Color((0.62, 0.48, 0.56))
+FAR_LIT = Color((0.95, 0.72, 0.58))
 for layer, (radius, top) in enumerate(((60, 9), (85, 19), (120, 34))):
     segs = 220
     rows = []
@@ -254,7 +256,12 @@ for layer, (radius, top) in enumerate(((60, 9), (85, 19), (120, 34))):
     for k in range(segs):
         f = bm.faces.new((rows[k][0], rows[k + 1][0], rows[k + 1][1], rows[k][1]))
         for loop in f.loops:
-            loop[col] = (FAR.r, FAR.g, FAR.b, 1.0)
+            # Lit gold along the ridge toward the sun, cooler mauve in the folds and at the foot.
+            v = loop.vert.co
+            up = smoothstep(LAKE_Z - 2, LAKE_Z + top + 2, v.z)
+            c = mix(FAR_FOOT, FAR, up)
+            c = mix(c, FAR_LIT, up * max(0.0, math.cos(math.atan2(v.y, v.x) - math.radians(75))) * 0.6)
+            loop[col] = (c.r, c.g, c.b, 1.0)
 me = bpy.data.meshes.new('Landing.Mountains')
 bm.to_mesh(me)
 bm.free()

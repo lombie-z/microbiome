@@ -242,7 +242,26 @@ export function Sky({ sun }: { sun: Mesh | null }) {
       <mesh ref={dome} name="SkyDome" material={material} renderOrder={-100} frustumCulled={false}>
         <sphereGeometry args={[150, 32, 16]} />
       </mesh>
-      <directionalLight ref={light} position={SUN_POSITION.toArray()} color={WARM_LIGHT} intensity={0} />
+      {/* Its shadows cover the landing: the canyon round the lake, so cliffs shade each other and the frog sits in its
+          own shadow on its pad. Aimed at the lake's centre. */}
+      <directionalLight
+        ref={light}
+        position={SUN_POSITION.toArray()}
+        color={WARM_LIGHT}
+        intensity={0}
+        castShadow
+        shadow-mapSize={[4096, 4096]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.04}
+        shadow-camera-left={-40}
+        shadow-camera-right={40}
+        shadow-camera-top={40}
+        shadow-camera-bottom={-40}
+        shadow-camera-near={1}
+        shadow-camera-far={160}
+      >
+        <object3D attach="target" position={[-5, -11, 0]} />
+      </directionalLight>
     </>
   );
 }
