@@ -262,8 +262,8 @@ export function Ticket() {
     Object.assign(el.style, {
       width: `${(W + PAD * 2) * ui}px`,
       height: `${(H + PAD * 2) * ui}px`,
-      marginTop: `${-(PAD - 16) * ui}px`,
-      marginRight: `${-(PAD - 16) * ui}px`,
+      marginTop: `${-(PAD - 44) * ui}px`,
+      marginRight: `${-(PAD - 32) * ui}px`,
     });
     const ctx = el.getContext('2d') as CanvasRenderingContext2D;
     const root = getComputedStyle(document.documentElement);
@@ -281,7 +281,7 @@ export function Ticket() {
       g.scale(scale, scale);
       // Set down a little askew.
       g.translate(PAD + W / 2, PAD + H / 2);
-      g.rotate(-0.03);
+      g.rotate(-0.1);
       g.translate(-W / 2, -H / 2);
       drawTicket(g, part, fonts, scale);
       return c;
