@@ -586,6 +586,23 @@ CATTAIL_LIT = Color((0.82, 0.58, 0.3))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 REED_BED = at(1420, 770)
+# The pebbles (placed below) by pixel position in the reference, defined here so the reeds can root between them.
+PEBBLES = [(1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95), (1405, 905, 90), (1525, 880, 60),
+           (930, 1015, 95), (1355, 1015, 105), (1180, 885, 55), (1050, 905, 42), (1530, 985, 75), (1280, 880, 40),
+           # The heap behind and between, smaller stones climbing toward the reeds.
+           (1340, 820, 38), (1440, 830, 45), (1230, 820, 30), (1500, 740, 50), (1400, 770, 35), (1120, 845, 32),
+           (990, 960, 50), (1460, 960, 55), (1160, 960, 45), (1300, 940, 45), (860, 1000, 60), (1420, 1000, 60)]
+
+
+def in_pebble(point):
+    """Whether a point on the water lies under one of the pebbles (with a little margin)."""
+    for px, py, half in PEBBLES:
+        c = at(px, py)
+        if (point.xy - c.xy).length < px_size(c, half) * 1.15:
+            return True
+    return False
+
+
 edge_layer = bm.verts.layers.float.new('_edge')
 
 
@@ -624,6 +641,8 @@ def blade(base, height, width, lean, bend_dir, shade):
 # ones between.
 for i in range(85):
     base = REED_BED + Vector((rnd.gauss(0.15, 0.3), rnd.gauss(-0.1, 0.35), -0.05))
+    while in_pebble(base):
+        base = REED_BED + Vector((rnd.gauss(0.15, 0.3), rnd.gauss(-0.1, 0.35), -0.05))
     top = height_at(base, rnd.uniform(-60, 520))
     broad = rnd.random() < 0.55
     lean = rnd.uniform(0.15, 0.7) if broad else rnd.uniform(0.0, 0.3)
@@ -657,11 +676,6 @@ STONE_WARM = Color((0.78, 0.64, 0.52))
 STONE_GREY = Color((0.64, 0.62, 0.6))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
-PEBBLES = [(1300, 745, 55), (1490, 788, 70), (1080, 1005, 115), (1235, 965, 95), (1405, 905, 90), (1525, 880, 60),
-           (930, 1015, 95), (1355, 1015, 105), (1180, 885, 55), (1050, 905, 42), (1530, 985, 75), (1280, 880, 40),
-           # The heap behind and between, smaller stones climbing toward the reeds.
-           (1340, 820, 38), (1440, 830, 45), (1230, 820, 30), (1500, 740, 50), (1400, 770, 35), (1120, 845, 32),
-           (990, 960, 50), (1460, 960, 55), (1160, 960, 45), (1300, 940, 45), (860, 1000, 60), (1420, 1000, 60)]
 for px, py, half in PEBBLES:
     contact = at(px, py)
     r = px_size(contact, half)

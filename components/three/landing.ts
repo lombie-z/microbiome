@@ -177,12 +177,9 @@ if (diffuseColor.g > diffuseColor.r) {
 if (diffuseColor.g > diffuseColor.r) {
   vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
   vec3 viewW = normalize(cameraPosition - vLandingPos);
-  // (A broad lobe round the half-way direction between the eye and the sun: the sun's off to the side, so a tight
-  // mirror glint almost never lines up on blades facing the camera.)
-  vec3 halfway = normalize(${SUN_DIR} + viewW);
-  float glare = pow(max(dot(nW, halfway), 0.0), 3.0);
-  float fresnel = 0.4 + 0.6 * pow(1.0 - abs(dot(nW, viewW)), 2.0);
-  totalEmissiveRadiance += vec3(1.0, 0.8, 0.5) * glare * fresnel * 1.6;
+  float glare = pow(max(dot(reflect(-viewW, nW), ${SUN_DIR}), 0.0), 6.0);
+  float fresnel = 0.3 + 0.7 * pow(1.0 - abs(dot(nW, viewW)), 2.0);
+  totalEmissiveRadiance += vec3(1.0, 0.78, 0.45) * glare * fresnel * 1.8;
 }
 // Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
 if (diffuseColor.r > diffuseColor.g) {
