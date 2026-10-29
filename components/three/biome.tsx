@@ -200,7 +200,7 @@ export function Biome({ onReady, onSun }: { onReady: () => void; onSun: (sun: Me
 
   useStudioReflections(scene, 0.8);
   // The landing's reeds reflect the landing itself, wet and glossy.
-  useLandingReflections(scene, ['Reed'], 1);
+  useLandingReflections(scene, ['Reed'], 2);
   // Compile every shader up front (with everything shown, so the sun, clouds and rainbow that appear later are
   // included), then report ready once a frame has drawn: no stalls mid-scroll when something first comes into view.
   const gl = useThree((s) => s.gl);
