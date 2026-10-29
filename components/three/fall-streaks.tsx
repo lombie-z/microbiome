@@ -192,6 +192,8 @@ export function FallStreaks() {
         uColor: { value: new Color(1.45, 1.38, 1.28) },
         uOpacity: { value: 0.5 },
       },
+      // (Both sides, so the lake's mirror, which sees them flipped, reflects the fall's strands too.)
+      side: DoubleSide,
       transparent: true,
       depthWrite: false,
     });

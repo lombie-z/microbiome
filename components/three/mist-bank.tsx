@@ -2,7 +2,7 @@
 
 import { useFrame } from '@react-three/fiber';
 import { useMemo } from 'react';
-import { InstancedBufferAttribute, InstancedBufferGeometry, PlaneGeometry, ShaderMaterial } from 'three';
+import { DoubleSide, InstancedBufferAttribute, InstancedBufferGeometry, PlaneGeometry, ShaderMaterial } from 'three';
 import { journey, landingAt } from '@/lib/journey';
 
 // The great billows of spray at the fall's foot, as in the reference: heaped cauliflower clouds sitting on the water,
@@ -125,6 +125,9 @@ export function MistBank() {
       uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 } },
       transparent: true,
       depthWrite: false,
+      // Both sides: the lake's mirror sees the cards from behind (a reflection flips faces), and the billows should be
+      // in the water too.
+      side: DoubleSide,
     });
     return { geometry, material };
   }, []);
