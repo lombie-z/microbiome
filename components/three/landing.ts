@@ -107,9 +107,13 @@ float h = max(transformed.y + 11.0, 0.0);
 float sway = bed * h * h * 0.03;
 transformed.x += sway * sin(uTime * 1.3 + transformed.x * 2.0 + transformed.z * 3.0);
 transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
-        // Darker, duller greens than the vertex colours: the reference's reeds are mostly in shadow against the sun.
-        colour: 'diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.7) * 0.8;',
-        light: BACKLIT(1.4),
+        // Blades olive rather than spring green (the grade's vibrance lifts them).
+        colour:
+          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7);',
+        // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades stay smooth.
+        normal: BUMP('lNoise(vLandingPos * vec3(400.0, 120.0, 400.0)) * step(0.0, diffuseColor.r - diffuseColor.g)', 0.0012),
+        // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
+        light: `${BACKLIT(1.4)}\ntotalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.2, 0.08) * step(diffuseColor.r, diffuseColor.g);`,
       });
     case 'Pad':
       // Waxy and wet: deep olive, a golden sheen where the low sun reflects off it, glowing through its thin edges.

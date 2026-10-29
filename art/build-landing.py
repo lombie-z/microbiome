@@ -532,40 +532,53 @@ for side in (-1, 1):
 finish('Landing.FrogEyes', bm, material('FrogEye', 0.08))
 
 # Reeds and cattails, towering up the right of the frame from a bed at the water's edge.
-REED = Color((0.13, 0.27, 0.07))
-REED_TIP = Color((0.5, 0.52, 0.18))
-CATTAIL = Color((0.42, 0.24, 0.1))
-CATTAIL_LIT = Color((0.68, 0.42, 0.16))
+REED = Color((0.12, 0.3, 0.06))
+REED_LIGHT = Color((0.32, 0.55, 0.12))
+REED_TIP = Color((0.62, 0.6, 0.22))
+CATTAIL = Color((0.5, 0.31, 0.14))
+CATTAIL_LIT = Color((0.82, 0.58, 0.3))
 bm = bmesh.new()
 col = bm.loops.layers.color.new('Col')
 REED_BED = at(1420, 770)
 
 
-def blade(base, height, width, lean, bend_dir):
-    segs = 14
-    a = math.atan2(bend_dir.y, bend_dir.x) + math.pi / 2 + rnd.uniform(-0.6, 0.6)
-    side = Vector((math.cos(a), math.sin(a), 0))
+def blade(base, height, width, lean, bend_dir, shade):
+    """A grass blade: broad, keeled down a midrib (three verts across, the middle raised), tapering to a point and
+    arching over toward bend_dir. Turned mostly broadside to the camera, so its width reads."""
+    segs = 18
+    to_eye = (EYE - base)
+    to_eye.z = 0
+    to_eye.normalize()
+    face = Vector((-to_eye.y, to_eye.x, 0))
+    twist = rnd.uniform(-0.5, 0.5)
+    side = (face * math.cos(twist) + to_eye * math.sin(twist)).normalized()
+    keel = to_eye * width * 0.35
+    base_colour = mix(REED, REED_LIGHT, shade)
     prev = None
     for k in range(segs + 1):
         t = k / segs
-        w = width * (1 - t) ** 0.6 * (0.6 + 0.4 * math.sin(math.pi * min(t * 1.6, 1.0)))
-        # Arching over toward bend_dir, more and more toward the tip.
-        centre = base + Vector((0, 0, height * t * (1 - 0.18 * lean * t))) + bend_dir * lean * height * t ** 2.2
-        left, right = bm.verts.new(centre - side * w), bm.verts.new(centre + side * w)
+        w = width * (1 - t ** 1.4) * (0.75 + 0.25 * math.sin(math.pi * min(t * 2.2, 1.0)))
+        centre = base + Vector((0, 0, height * t * (1 - 0.35 * lean * t))) + bend_dir * lean * height * t ** 1.8
+        row = (bm.verts.new(centre - side * w), bm.verts.new(centre + keel * (1 - t)), bm.verts.new(centre + side * w))
         if prev:
-            f = bm.faces.new((prev[0], prev[1], right, left))
-            for loop in f.loops:
-                c = mix(REED, REED_TIP, smoothstep(0.3, 1.0, t) * 0.7)
-                loop[col] = (c.r, c.g, c.b, 1.0)
-        prev = (left, right)
+            for j in range(2):
+                f = bm.faces.new((prev[j], prev[j + 1], row[j + 1], row[j]))
+                for loop in f.loops:
+                    c = mix(base_colour, REED_TIP, smoothstep(0.45, 1.0, t) * 0.6)
+                    loop[col] = (c.r, c.g, c.b, 1.0)
+        prev = row
 
 
-for i in range(150):
+# Broad blades in a clump, the tallest arching out over the water to the left (as in the reference), and thinner
+# ones between.
+for i in range(85):
     base = REED_BED + Vector((rnd.gauss(0.15, 0.3), rnd.gauss(-0.1, 0.35), -0.05))
-    top = height_at(base, rnd.uniform(-60, 420))
-    lean = rnd.uniform(0.0, 0.5) ** 1.5
-    bend = Vector((rnd.uniform(-1, 0.6), rnd.uniform(-0.4, 1.0), 0)).normalized()
-    blade(base, top, rnd.uniform(0.008, 0.02), lean, bend)
+    top = height_at(base, rnd.uniform(-60, 520))
+    broad = rnd.random() < 0.55
+    lean = rnd.uniform(0.15, 0.7) if broad else rnd.uniform(0.0, 0.3)
+    # Mostly leaning left in the frame (toward +y, Blender) and a little toward the camera.
+    bend = Vector((rnd.uniform(-0.8, 0.2), rnd.uniform(0.2, 1.0), 0)).normalized()
+    blade(base, top * (0.9 if broad else 1.0), rnd.uniform(0.025, 0.05) if broad else rnd.uniform(0.008, 0.018), lean, bend, rnd.random())
 # Cattails: tall stems with a brown velvet head and a thin spike above (heads as in the reference).
 for hx, head_top, head_bottom in ((1462, 105, 195), (1425, 210, 300), (1420, 318, 420), (1500, 260, 335), (1385, 420, 480)):
     base = at(hx, 775) + Vector((rnd.uniform(-0.05, 0.05), rnd.uniform(-0.05, 0.05), -0.05))
@@ -575,11 +588,15 @@ for hx, head_top, head_bottom in ((1462, 105, 195), (1425, 210, 300), (1420, 318
     for v in geom['verts']:
         v.co += base + Vector((0, 0, stem_top / 2))
     colour_faces(bm, geom['verts'], col, lambda co: REED)
-    radius = px_size(base, 16)
+    radius = px_size(base, 11)
     geom = bmesh.ops.create_uvsphere(bm, u_segments=14, v_segments=12, radius=1)
     for v in geom['verts']:
-        v.co = Vector((v.co.x * radius, v.co.y * radius, v.co.z * (z1 - z0) / 2)) + base + Vector((0, 0, (z0 + z1) / 2))
-    colour_faces(bm, geom['verts'], col, lambda co, b=base: mix(CATTAIL, CATTAIL_LIT, smoothstep(-0.2, 0.6, noise.noise(co * 60)) * 0.6))
+        # A sausage, not an egg: round in section, straight-sided along its length.
+        h = math.hypot(v.co.x, v.co.y)
+        fill = (1 - abs(v.co.z) ** 4) ** 0.25 / h if h > 1e-6 else 0.0
+        v.co = Vector((v.co.x * fill * radius, v.co.y * fill * radius, v.co.z * (z1 - z0) / 2)) + base + Vector((0, 0, (z0 + z1) / 2))
+    # Fibrous, lit gold on the sun's side (+y, the frame's left).
+    colour_faces(bm, geom['verts'], col, lambda co, b=base: mix(CATTAIL, CATTAIL_LIT, min(1.0, smoothstep(-0.2, 0.6, noise.noise(co * 60)) * 0.5 + smoothstep(-0.02, 0.03, (co - b).y) * 0.5)))
 finish('Landing.Reeds', bm, material('Reed', 0.45))
 
 # Pebbles: wet grey-brown granite (speckled and glittering on the site), heaped in the bottom right (out of focus,
