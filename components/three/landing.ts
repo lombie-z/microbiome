@@ -24,6 +24,8 @@ type Patch = {
   vertex?: string;
   colour?: string;
   roughness?: string;
+  // After the environment's light is gathered (iblIrradiance: its diffuse light, radiance: its reflection).
+  ibl?: string;
   normal?: string;
   light?: string;
   // Extra uniforms, declarations for the fragment shader, and for the vertex shader.
@@ -50,6 +52,7 @@ function physical(source: MeshStandardMaterial, settings: Partial<MeshPhysicalMa
       .replace('#include <common>', `#include <common>\n${varyings}\n${NOISE}\n${patch.header ?? ''}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${patch.colour ?? ''}`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n${patch.roughness ?? ''}`)
+      .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${patch.ibl ?? ''}`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${patch.normal ?? ''}`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${patch.light ?? ''}`);
   };
@@ -101,26 +104,40 @@ const BACKLIT = (strength: number) => /* glsl */ `
 export function landingMaterial(source: MeshStandardMaterial): Material | null {
   switch (source.name) {
     case 'Reed':
-      return physical(source, { roughness: 0.45, sheen: 0.6, sheenColor: source.color.clone().setRGB(1, 0.85, 0.5), side: DoubleSide }, 'reed', {
-        // Across each blade: -1 one margin, 1 the other, 0 the midrib (art/build-landing.py).
-        vertexHeader: 'attribute float _edge;\nvarying float vEdge;',
-        header: 'varying float vEdge;',
-        vertex: /* glsl */ `
+      // Blades: wet and glossy (they reflect the landing itself, its captured surroundings: see landingReflections),
+      // and a little see-through.
+      return physical(
+        source,
+        { roughness: 0.45, sheen: 0.6, sheenColor: source.color.clone().setRGB(1, 0.85, 0.5), side: DoubleSide, transparent: true },
+        'reed',
+        {
+          // Across each blade: -1 one margin, 1 the other, 0 the midrib (art/build-landing.py).
+          vertexHeader: 'attribute float _edge;\nvarying float vEdge;',
+          header: 'varying float vEdge;',
+          vertex: /* glsl */ `
 vEdge = _edge;
 float bed = 1.0 - smoothstep(1.2, 2.2, length(transformed.xz - vec2(${REED_BED})));
 float h = max(transformed.y + 11.0, 0.0);
 float sway = bed * h * h * 0.03;
 transformed.x += sway * sin(uTime * 1.3 + transformed.x * 2.0 + transformed.z * 3.0);
 transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
-        // Blades olive rather than spring green (the grade's vibrance lifts them).
-        colour:
-          // (Heads: speckled tan and dark brown, as packed seed fibres.)
-          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
-        // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades stay smooth.
-        normal: BUMP('lNoise(vLandingPos * vec3(700.0, 200.0, 700.0)) * step(0.0, diffuseColor.r - diffuseColor.g)', 0.0016),
-        // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
-        // (A strong rim glow on the cattail heads; only a little on the blades.)
-        light: `if (diffuseColor.r > diffuseColor.g) {
+          // Blades olive rather than spring green (the grade's vibrance lifts them).
+          colour:
+            // (Heads: speckled tan and dark brown, as packed seed fibres.)
+            'if (diffuseColor.g > diffuseColor.r) { diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); diffuseColor.a = 0.8; } else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
+          // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades gentle undulations, so their
+          // reflections break up along them as on a real leaf.
+          normal: BUMP(
+            'diffuseColor.r > diffuseColor.g ? lNoise(vLandingPos * vec3(700.0, 200.0, 700.0)) : lNoise(vLandingPos * vec3(30.0, 4.0, 30.0)) * 2.5',
+            0.0016
+          ),
+          roughness: 'if (diffuseColor.g > diffuseColor.r) roughnessFactor = 0.2;',
+          // The captured surroundings only as reflection on the blades (not lighting them flat all over), and hardly at
+          // all on the cattail heads.
+          ibl: 'if (diffuseColor.r > diffuseColor.g) { iblIrradiance *= 0.1; radiance *= 0.1; } else { iblIrradiance *= 0.15; }',
+          // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
+          // (A strong rim glow on the cattail heads; only a little on the blades.)
+          light: `if (diffuseColor.r > diffuseColor.g) {
 ${BACKLIT(1.4)}
 } else {
 ${BACKLIT(0.45)}
@@ -133,14 +150,6 @@ if (diffuseColor.g > diffuseColor.r) {
   float bits = smoothstep(0.6, 0.85, lNoise(vLandingPos * vec3(60.0, 220.0, 60.0)));
   totalEmissiveRadiance += vec3(1.0, 0.82, 0.48) * leftMargin * bits * 0.9;
 }
-// Waxy blades reflect: a long glossy strip down each blade, off the midrib toward its sunward margin, where the bright
-// sky and the low sun slide along the leaf; it comes and goes along the blade's length as the leaf twists.
-if (diffuseColor.g > diffuseColor.r) {
-  float side = -vEdge * sign(dFdx(vEdge) + 1e-6);
-  float strip = 1.0 - smoothstep(0.05, 0.35, abs(side - 0.35));
-  float along = smoothstep(0.3, 0.7, lNoise(vLandingPos * vec3(6.0, 2.5, 6.0)));
-  totalEmissiveRadiance += vec3(1.0, 0.86, 0.62) * strip * along * 0.7;
-}
 // Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
 if (diffuseColor.r > diffuseColor.g) {
   vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
@@ -150,7 +159,8 @@ if (diffuseColor.r > diffuseColor.g) {
   float tips = smoothstep(0.72, 0.9, fibre);
   totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * (pow(rim, 1.6) * 1.4 + tips * (0.4 + rim) * 1.6) * sunward;
 }`,
-      });
+        }
+      );
     case 'Pad':
       // Waxy and wet: deep olive, a golden sheen where the low sun reflects off it, glowing through its thin edges.
       return physical(source, { roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15 }, 'pad', {
