@@ -190,7 +190,21 @@ diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffu
 }`,
         roughness: `{\n${projection}\n  roughnessFactor = clamp(tri(uGraniteRough, pp, w).r * 0.6, 0.15, 0.7);\n}`,
         normal: `{\n${projection}\n  normal = normalize((viewMatrix * vec4(triNormal(uGraniteNor, pp, w, nW, 1.4), 0.0)).xyz);\n}`,
-        light: GLINTS(140.0, 0.93, 14.0) + BACKLIT(1.1),
+        // Wet: hot glints where the low sun catches each stone, which the shallow focus turns into bokeh.
+        light: `${GLINTS(140.0, 0.9, 18.0)}${BACKLIT(1.1)}
+{
+  // The sun catches each wet stone's rim on its sunward side: a hot crescent, broken by the stone's grain.
+  // (The sun's left of the camera's line, z negative.)
+  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 2.5);
+  float sunward = smoothstep(0.1, 0.7, dot(nW, ${SUN_DIR}) + 0.3 * nW.y);
+  float grain = smoothstep(0.35, 0.75, lNoise(vLandingPos * 60.0));
+  totalEmissiveRadiance += vec3(1.0, 0.72, 0.4) * rim * sunward * grain * 4.0;
+  // And the wet crowns: the sky and the low sun sliding off each stone's top, in spots where the film of water beads.
+  float crown = smoothstep(0.55, 0.95, nW.y + 0.25 * nW.z);
+  float bead = smoothstep(0.6, 0.85, lNoise(vLandingPos * 35.0));
+  totalEmissiveRadiance += vec3(1.0, 0.78, 0.5) * crown * (0.25 + 2.5 * bead);
+}`,
       });
     }
     default:
