@@ -102,7 +102,7 @@ export function landingMaterial(source: MeshStandardMaterial): Material | null {
   switch (source.name) {
     case 'Reed':
       return physical(source, { roughness: 0.45, sheen: 0.6, sheenColor: source.color.clone().setRGB(1, 0.85, 0.5), side: DoubleSide }, 'reed', {
-        // The blades' margins (art/build-landing.py marks them 1, the midrib 0).
+        // Across each blade: -1 one margin, 1 the other, 0 the midrib (art/build-landing.py).
         vertexHeader: 'attribute float _edge;\nvarying float vEdge;',
         header: 'varying float vEdge;',
         vertex: /* glsl */ `
@@ -115,28 +115,32 @@ transformed.z += sway * 0.6 * sin(uTime * 0.9 + transformed.x * 3.0);`,
         // Blades olive rather than spring green (the grade's vibrance lifts them).
         colour:
           // (Heads: speckled tan and dark brown, as packed seed fibres.)
-          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); else diffuseColor.rgb *= (0.78 + 0.3 * lNoise(vLandingPos * vec3(900.0, 260.0, 900.0))) * vec3(0.92, 0.84, 0.78);',
+          'if (diffuseColor.g > diffuseColor.r) diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.6) * vec3(0.95, 0.85, 0.7); else diffuseColor.rgb *= 0.55 + 0.75 * lNoise(vLandingPos * vec3(500.0, 150.0, 500.0));',
         // The cattail heads (brown: red over green) get a fuzzy, fibrous surface; the blades stay smooth.
         normal: BUMP('lNoise(vLandingPos * vec3(700.0, 200.0, 700.0)) * step(0.0, diffuseColor.r - diffuseColor.g)', 0.0016),
         // Thin blades with the low sun behind them: they glow green-gold right through, not just at the rims.
-        // (The rim glow only on the blades: the heads are dense and dark against the light.)
-        light: `if (diffuseColor.g > diffuseColor.r) {
+        // (A strong rim glow on the cattail heads; only a little on the blades.)
+        light: `if (diffuseColor.r > diffuseColor.g) {
 ${BACKLIT(1.4)}
+} else {
+${BACKLIT(0.45)}
 }
 totalEmissiveRadiance += diffuseColor.rgb * vec3(0.2, 0.2, 0.08) * step(diffuseColor.r, diffuseColor.g);
-// Blade edges glisten: a fine bright line along each margin where the low sun catches it, broken into beads of
-// light along its length.
+// Blade edges glisten, subtly: only the margin on the blade's left in the frame (the sun's side), and only in bits
+// along its length. (Which margin is on the left: the one the across-value falls toward, moving left on screen.)
 if (diffuseColor.g > diffuseColor.r) {
-  float margin = smoothstep(0.7, 0.97, vEdge);
-  float beads = 0.35 + 0.65 * smoothstep(0.4, 0.8, lNoise(vLandingPos * vec3(60.0, 220.0, 60.0)));
-  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
-  totalEmissiveRadiance += vec3(1.0, 0.82, 0.48) * margin * beads * (0.6 + 1.4 * rim) * 3.2;
+  float leftMargin = smoothstep(0.75, 0.97, -vEdge * sign(dFdx(vEdge) + 1e-6));
+  float bits = smoothstep(0.6, 0.85, lNoise(vLandingPos * vec3(60.0, 220.0, 60.0)));
+  totalEmissiveRadiance += vec3(1.0, 0.82, 0.48) * leftMargin * bits * 0.9;
 }
-// Cattail heads: lit only in bits down their left side (the sun's side in the frame), subtly.
+// Cattail heads glisten: velvety fibres, the low sun catching a fuzzy halo round the rim and countless tiny fibre-tips.
 if (diffuseColor.r > diffuseColor.g) {
-  float left = smoothstep(-0.35, -0.85, normalize(vNormal).x);
-  float bits = smoothstep(0.6, 0.85, lNoise(vLandingPos * vec3(1100.0, 320.0, 1100.0)));
-  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * left * (0.12 + bits * 0.5);
+  vec3 nW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+  float rim = 1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition)));
+  float sunward = 0.35 + 0.65 * smoothstep(-0.3, 0.6, dot(nW, ${SUN_DIR}));
+  float fibre = lNoise(vLandingPos * vec3(900.0, 260.0, 900.0));
+  float tips = smoothstep(0.72, 0.9, fibre);
+  totalEmissiveRadiance += vec3(1.0, 0.7, 0.36) * (pow(rim, 1.6) * 1.4 + tips * (0.4 + rim) * 1.6) * sunward;
 }`,
       });
     case 'Pad':

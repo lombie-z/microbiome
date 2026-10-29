@@ -607,8 +607,10 @@ def blade(base, height, width, lean, bend_dir, shade):
         w = width * (1 - t ** 1.4) * (0.75 + 0.25 * math.sin(math.pi * min(t * 2.2, 1.0)))
         centre = base + Vector((0, 0, height * t * (1 - 0.35 * lean * t))) + bend_dir * lean * height * t ** 1.8
         row = (bm.verts.new(centre - side * w), bm.verts.new(centre + keel * (1 - t)), bm.verts.new(centre + side * w))
-        # Margins marked (the site's '_edge' attribute): the low sun glistens along them.
-        row[0][edge_layer] = row[2][edge_layer] = 1.0
+        # Margins marked (the site's '_edge' attribute): -1 one side, 1 the other, 0 the midrib, so the site can tell
+        # which margin faces the sun.
+        row[0][edge_layer] = -1.0
+        row[2][edge_layer] = 1.0
         if prev:
             for j in range(2):
                 f = bm.faces.new((prev[j], prev[j + 1], row[j + 1], row[j]))
