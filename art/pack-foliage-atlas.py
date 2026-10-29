@@ -1,6 +1,6 @@
 """Pack the foliage sprites (art/bake-foliage-sprites.py) into one atlas for the site: each sprite cropped to its
 plant, scaled to fill a square cell's height (or width), standing on the cell's floor and centred. Writes
-public/textures/landing/foliage-atlas.png and foliage-atlas.json (per cell: name, and the plant's width / height).
+public/textures/landing/foliage-atlas.webp and foliage-atlas.json (per cell: name, and the plant's width / height).
 
 Run: python3 art/pack-foliage-atlas.py <sprites dir>
 """
@@ -29,7 +29,7 @@ for i, name in enumerate(NAMES):
     atlas.paste(im, (x0 + (CELL - im.width) // 2, y0 + CELL - im.height), im)
     cells.append({'name': name, 'aspect': round(im.width / im.height, 3), 'fill': round(max(im.width, im.height) / CELL, 3)})
 
-atlas.save(os.path.join(OUT, 'foliage-atlas.png'), optimize=True)
+atlas.save(os.path.join(OUT, 'foliage-atlas.webp'), quality=85, method=6)
 with open(os.path.join(OUT, 'foliage-atlas.json'), 'w') as fh:
     json.dump({'cols': COLS, 'rows': rows, 'cells': cells}, fh, indent=1)
 print('packed', len(cells), 'into', atlas.size)

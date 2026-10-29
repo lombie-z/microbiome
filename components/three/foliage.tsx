@@ -54,7 +54,7 @@ const BLOSSOM = ['#e7a3b4', '#d98aa2', '#f2c0c8'].map((c) => new Color(c));
 
 // Scanned trees (Poly Haven's island_tree_01, a pink-blossom variant of it, and island_tree_02), rendered in Blender
 // lit as the landing is (art/bake-foliage-sprites.py, packed by art/pack-foliage-atlas.py): 3x3 cells, three views each.
-const ATLAS = '/textures/landing/foliage-atlas.png';
+const ATLAS = '/textures/landing/foliage-atlas.webp';
 const GREEN_CELLS = [0, 1, 2, 6, 7, 8];
 const PINK_CELLS = [3, 4, 5];
 
