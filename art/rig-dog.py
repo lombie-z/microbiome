@@ -26,6 +26,7 @@ STRIDE = 0.5           # metres the dog travels per stride (the site should move
 DUTY = 0.63             # share of the cycle each foot is on the ground (a walk: three feet down most of the time)
 PHASE = {'L.hind': 0.0, 'L.fore': 0.25, 'R.hind': 0.5, 'R.fore': 0.75}   # lateral sequence: LH, LF, RH, RF
 HEAD = Vector((-0.005, 0, -0.03))      # build-dog.py's head offset
+SNIFF_NECK, SNIFF_HEAD = 56, 57         # Sniff's neck and head while the nose is down (as ang(): 0 straight down, 90 level)
 
 
 def hd(x, y, z):
@@ -47,13 +48,21 @@ for o in meshes:
 body = bpy.data.objects['Dog']
 bpy.context.view_layer.objects.active = body
 dec = body.modifiers.new('Decimate', 'DECIMATE')
-dec.ratio = 0.52
+dec.ratio = 0.47
 bpy.ops.object.modifier_apply(modifier='Decimate')
+for o in meshes:                       # the feet and tongue need less than their fine remesh gave them
+    if o.name.startswith(('Foot', 'Tongue')):
+        bpy.context.view_layer.objects.active = o
+        d = o.modifiers.new('Decimate', 'DECIMATE')
+        d.ratio = 0.6 if o.name == 'Tongue' else 0.36
+        bpy.ops.object.modifier_apply(modifier='Decimate')
+bpy.context.view_layer.objects.active = body
 
 # Before joining: which piece each vertex is on, and where the mouth is: the skin of the upper muzzle hidden inside the
 # shut lower jaw is the roof of the mouth, the top of the jaw hidden inside the muzzle its floor; bare, shown only when
 # the mouth opens.
-PART = {'Dog': 0, 'Jaw': 1, 'Tongue': 2, 'Ear.L': 3, 'Ear.R': 4}
+PART = {'Dog': 0, 'Jaw': 1, 'Tongue': 2, 'Ear.L': 3, 'Ear.R': 4, 'Foot.FL': 6, 'Foot.FR': 7, 'Foot.HL': 8, 'Foot.HR': 9}
+FOOT = {6: ('fpaw.L', 'pastern.L'), 7: ('fpaw.R', 'pastern.R'), 8: ('hpaw.L', 'hock.L'), 9: ('hpaw.R', 'hock.R')}
 
 
 def bvh(o):
@@ -70,9 +79,27 @@ def inside(tree, p):
 
 
 trees = {n: bvh(bpy.data.objects[n]) for n in ('Dog', 'Jaw')}
+LOWER_LIP = ((0.38, 0.039, 0.653), (0.418, 0.032, 0.648), (0.452, 0.017, 0.642))     # as build-dog.py
+LIP_R = 0.0068
+
+
+def lower_lip(p):
+    """The nearest point on the lower lip's margin (on p's side) and how far along it that is (0 at the corner)."""
+    s = 1 if p.y > 0 else -1
+    pts = [Vector(hd(x, y * s, z)) for x, y, z in LOWER_LIP]
+    best, run, total = None, 0.0, sum((b - a).length for a, b in zip(pts, pts[1:]))
+    for a, b in zip(pts, pts[1:]):
+        ab = b - a
+        t = max(0.0, min(1.0, (p - a).dot(ab) / ab.length_squared))
+        q = a + ab * t
+        if best is None or (p - q).length < (p - best[0]).length:
+            best = (q, (run + t * ab.length) / total)
+        run += ab.length
+    return best
 for o in meshes:
     part = o.data.attributes.new('part', 'INT', 'POINT')
     mouth = o.data.attributes.new('mouth', 'FLOAT', 'POINT')
+    lip = o.data.attributes.new('lip', 'FLOAT', 'POINT')
     for v in o.data.vertices:
         part.data[v.index].value = PART.get(o.name, 5)
         p = o.matrix_world @ v.co
@@ -81,6 +108,27 @@ for o in meshes:
             m = 1.0
         elif o.name == 'Jaw' and inside(trees['Dog'], p):
             m = 1.0
+        # The lips: black skin along the edges of the mouth. The upper lip where the flews meet the lower jaw; the
+        # lower lip over the top and outer side of its rolled margin (build-dog.py's LOWER_LIP), the pink gum inside
+        # it, a clean line between, and the fold under the roll furred.
+        if o.name == 'Dog' and m < 0.5 and p.x > 0.35 and 0.58 < p.z < 0.66:
+            near = trees['Jaw'].find_nearest(p)[0]
+            if near is not None:
+                lip.data[v.index].value = 1 - smooth(0.003, 0.011, (p - near).length)
+        elif o.name == 'Jaw':
+            c, along = lower_lip(p)
+            d = p - c
+            inward = -d.y * (1 if p.y > 0 else -1)            # toward the middle of the mouth
+            top = smooth(-0.0055, -0.003, d.z)                 # the roll down to just under its widest, not the fold
+            # (the inner face of the roll is the gum's: the gum line runs along the top of the lip)
+            black = ((1 - smooth(LIP_R + 0.002, LIP_R + 0.0035, d.length)) * top * smooth(0.0, 0.05, along)
+                     * (1 - smooth(0.2 * LIP_R, 0.5 * LIP_R, inward)))
+            # (the gum and the floor of the mouth inside the lip are bare; outside it, furred, even where the shut
+            # muzzle hides it)
+            n = v.normal
+            faces_in = n.z > 0.35 or n.y * (1 if p.y > 0 else -1) < -0.2
+            m = 1.0 if faces_in and inward > 0.0025 and d.z > -0.014 and black < 0.5 else 0.0
+            lip.data[v.index].value = black
         mouth.data[v.index].value = m
 
 bpy.ops.object.select_all(action='DESELECT')
@@ -144,10 +192,32 @@ rig.select_set(True)
 bpy.context.view_layer.objects.active = rig
 bpy.ops.object.parent_set(type='ARMATURE_AUTO')
 
+# Helpers (added after the heat weighting, which they take no part in), posed by drive_helpers() below and keyed with
+# the rest. At each stifle a knee-cap bone turns half as far as the second thigh does, and the skin round the knee,
+# shared between the thigh and the second thigh, rides it: the knee bends that skin through two half-angles instead of
+# one fold. In front of each stifle a flank bone carried by the hips follows the knee as the leg swings,
+# without turning: the skin web from the stifle to the belly (the flank fold) rides it, so as the knee comes forward
+# that skin is pushed forward and spread over a hand's breadth, instead of being swung up round the hip joint into a
+# crease along the top of the thigh.
+HALF = {}       # knee-cap: the bone it turns half as far as
+FOLLOW = {}     # flank: the bone whose head (the stifle) it follows
+FOLLOW_UP, BULGE = 1.0, 0.0          # how much of the knee's rise it follows; how far out it pushes the skin
+bpy.ops.object.mode_set(mode='EDIT')
+for side, s in (('L', 1), ('R', -1)):
+    shin = arm_data.edit_bones[f'shin.{side}']
+    b = arm_data.edit_bones.new(f'stifle.{side}')
+    b.head, b.tail, b.roll = shin.head.copy(), shin.tail.copy(), shin.roll
+    b.parent = arm_data.edit_bones[f'thigh.{side}']
+    HALF[b.name] = shin.name
+    b = arm_data.edit_bones.new(f'flank.{side}')
+    b.head, b.tail, b.roll = shin.head.copy(), shin.head + Vector((0.08, 0, 0)), 0
+    b.parent = arm_data.edit_bones['hips']
+    FOLLOW[b.name] = shin.name
+bpy.ops.object.mode_set(mode='OBJECT')
+
 # Weights. Heat weighting does the body; the loose pieces are set outright (the jaw and tongue ride their bones, the
 # ears hang from the head and swing more toward the tip, eyes and nose go with the head), and none of those bones
-# reach into the body. Over the flank, the thigh's pull is eased into the hips' so the skin in front of the stifle
-# stretches smoothly as the leg swings forward instead of folding.
+# reach into the body. Over the flank and the knee, the helpers above take over (below).
 VG = {g.name: g for g in body.vertex_groups}
 for n in [b.name for b in arm_data.bones]:
     if n not in VG:
@@ -159,8 +229,8 @@ LOOSE = ('jaw', 'tongue', 'ear.L', 'ear.R')
 
 
 def set_weights(v, ws):
-    for g in list(v.groups):
-        body.vertex_groups[g.group].remove([v.index])
+    for gi in [g.group for g in v.groups]:          # (indices first: the elements shift as they're removed)
+        body.vertex_groups[gi].remove([v.index])
     for n, w in ws.items():
         if w > 0:
             VG[n].add([v.index], w, 'REPLACE')
@@ -178,30 +248,107 @@ for v in me.vertices:
         set_weights(v, {EAR_BONE[k]: w, 'head': 1 - w})
     elif k == 5:
         set_weights(v, {'head': 1.0})
+    elif k in FOOT:
+        # The foot rides the paw bone; the top of the heel pad behind blends into the pastern (or rear pastern).
+        paw, above = FOOT[k]
+        cx = rig.data.bones[paw].head_local.x
+        w = 0.5 * smooth(0.024, 0.042, v.co.z) * smooth(cx + 0.012, cx - 0.012, v.co.x)
+        set_weights(v, {paw: 1 - w, above: w})
     else:
         ws = {groups[g.group]: g.weight for g in v.groups if groups[g.group] not in LOOSE}
         if v.co.x > 0.3 and v.co.z > 0.55:          # the head itself: the loose pieces' share goes to the head
             lost = sum(g.weight for g in v.groups if groups[g.group] in LOOSE)
             ws['head'] = ws.get('head', 0) + lost
+            # The corners of the mouth: the skin where the flews meet the lower jaw goes partly with the jaw, so as
+            # the mouth opens the lips stretch into a corner instead of the jaw parting from the muzzle.
+            d = min((v.co - Vector(hd(0.392, 0.034 * s, 0.648))).length for s in (-1, 1))
+            j = 0.65 * (1 - smooth(0.008, 0.03, d)) * (1 - smooth(0.66, 0.675, v.co.z - HEAD.z))
+            if j > 0 and me.attributes['mouth'].data[v.index].value < 0.5:
+                ws = {n: w * (1 - j) for n, w in ws.items()}
+                ws['jaw'] = j
         set_weights(v, ws)
 
-# Flank: where the skin runs from the front of the thigh to the belly (the flank fold), the weights of the hips,
-# spine and thigh are relaxed into their neighbours' so the swing stretches that skin over a hand's breadth instead of
-# folding it along one line.
+# The flank: skin in front of the thigh is the body's, not the thigh's (heat weighting lets the thigh reach well
+# forward into the flank). The leg's share there falls away with the distance in front of the femur; what it gives
+# up goes to the flank bone near the stifle and to the hips and spine further off.
+HIP, KNEE = Vector((-0.22, 0, 0.45)), Vector((-0.165, 0, 0.29))
+axis = (KNEE - HIP).normalized()
+ahead = Vector((-axis.z, 0, axis.x))                    # perpendicular to the femur, pointing forward
+groups = {g.index: g.name for g in body.vertex_groups}
+for v in me.vertices:
+    if part.data[v.index].value != 0 or abs(v.co.y) < 0.01:
+        continue
+    side = 'L' if v.co.y > 0 else 'R'
+    q = Vector((v.co.x, 0, v.co.z))
+    front = (q - HIP).dot(ahead)
+    along = (q - HIP).dot(axis) / (KNEE - HIP).length
+    zone = smooth(-0.4, -0.1, along) * (1 - smooth(1.15, 1.4, along)) * smooth(0.02, 0.11, front)
+    # Over the thigh itself, the skin is anchored at the top to the pelvis (the thigh's muscles run from it to the
+    # knee): the thigh's pull grows from a fifth at the hip joint to all of it at the knee, so the thigh bends as a
+    # whole as it swings instead of hinging at its top (where the skin in front of the joint would be swung up into
+    # the loin).
+    anchor = 0.8 * (1 - smooth(0.05, 0.85, along)) * (1 - smooth(1.0, 1.2, along))
+    # (and the body's share near the stifle goes to the flank bone, fading over a hand's breadth into the hips and
+    # spine, so the skin web is pushed forward evenly from the knee to the belly)
+    stifle_front = Vector((KNEE.x + 0.035, 0.075 if side == 'L' else -0.075, KNEE.z + 0.025))
+    near = (1 - smooth(0.03, 0.22, (v.co - stifle_front).length)) * smooth(0.0, 0.05, front)
+    if zone <= 0 and near <= 0 and anchor <= 0:
+        continue
+    ws = {groups[g.group]: g.weight for g in v.groups}
+    leg = [n for n in ws if n.split('.')[0] in ('thigh', 'shin') and n.endswith(side)]
+    give = 0.0
+    for n in leg:
+        cut = 1 - (1 - zone) * (1 - (anchor if n.startswith('thigh') else 0))
+        give += ws[n] * cut
+        ws[n] *= 1 - cut
+    body_w = {n: ws.get(n, 0) for n in ('hips', 'spine')}
+    tot = sum(body_w.values())
+    pool = give + tot
+    for n in ('hips', 'spine'):
+        ws[n] = pool * (1 - near) * (body_w[n] / tot if tot > 1e-4 else 0.5)
+    ws[f'flank.{side}'] = pool * near
+    set_weights(v, ws)
+
+
+# The knee: where the skin's shared between the thigh and the second thigh, the share is turned into the knee-cap's,
+# so a vertex half on each goes wholly with the half-turned knee-cap.
+def halve(v, helper, outer, inner):
+    ws = {groups[g.group]: g.weight for g in v.groups}
+    wo = sum(ws.get(n, 0) for n in outer)
+    wi = ws.get(inner, 0)
+    if min(wo, wi) < 1e-3:
+        return
+    u = wi / (wo + wi)                 # how far round the bend the vertex is meant to turn
+    total = wo + wi
+    for n in outer:
+        if ws.get(n, 0) > 0:
+            ws[n] = total * max(0.0, 1 - 2 * u) * ws[n] / wo
+    ws[inner] = total * max(0.0, 2 * u - 1)
+    ws[helper] = total * (2 * u if u <= 0.5 else 2 * (1 - u))
+    set_weights(v, ws)
+
+
+for v in me.vertices:
+    if part.data[v.index].value == 0:
+        for side in ('L', 'R'):
+            halve(v, f'stifle.{side}', (f'thigh.{side}',), f'shin.{side}')
+
+# Then a light relaxing of the body's and the flank bones' new weights into their neighbours', so the hand-over has no
+# edge (the leg's own weights are left as they are: relaxed, they would creep back into the flank).
 nbr = [[] for _ in me.vertices]
 for e in me.edges:
     a, b = e.vertices
     nbr[a].append(b)
     nbr[b].append(a)
-SOFT = ['hips', 'spine', 'thigh.L', 'thigh.R', 'shin.L', 'shin.R']
+SOFT = ['hips', 'spine', 'flank.L', 'flank.R']
 soft_idx = {VG[n].index: n for n in SOFT}
 region = {}
 for v in me.vertices:
     if part.data[v.index].value != 0:
         continue
     for s in (-1, 1):
-        d = (v.co - Vector((-0.145, 0.07 * s, 0.38))).length
-        f = 1 - smooth(0.05, 0.12, d)
+        d = (v.co - Vector((-0.12, 0.07 * s, 0.36))).length
+        f = 1 - smooth(0.05, 0.13, d)
         if f > 0:
             region[v.index] = max(region.get(v.index, 0), f)
 W = {i: {n: 0.0 for n in SOFT} for i in range(len(me.vertices))}
@@ -209,11 +356,11 @@ for v in me.vertices:
     for g in v.groups:
         if g.group in soft_idx:
             W[v.index][soft_idx[g.group]] = g.weight
-for _ in range(24):
+for _ in range(8):
     NW = {}
     for i, f in region.items():
         avg = {n: sum(W[j][n] for j in nbr[i]) / max(1, len(nbr[i])) for n in SOFT}
-        NW[i] = {n: (1 - 0.6 * f) * W[i][n] + 0.6 * f * avg[n] for n in SOFT}
+        NW[i] = {n: (1 - 0.5 * f) * W[i][n] + 0.5 * f * avg[n] for n in SOFT}
     for i in NW:
         W[i] = NW[i]
 for i in region:
@@ -235,11 +382,13 @@ fur = me.attributes.new('_fur', 'FLOAT', 'POINT')
 col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
 me.color_attributes.active_color = col
 me.color_attributes.render_color_index = me.color_attributes.find('Col')
-GOLD = Vector((0.6, 0.3, 0.075))      # the body's gold (linear)
+# A deep, rich gold (linear): it holds its shape against the landing's bright mist; the site's backlit rim does the glow.
+GOLD = Vector((0.6, 0.3, 0.075))      # the body's gold
 DEEP = Vector((0.42, 0.18, 0.04))     # richer along the back
 LEATHER = Vector((0.33, 0.135, 0.03))  # ear leather, darker still
 CREAM = Vector((0.84, 0.62, 0.34))    # feathering, lighter
 PALE = Vector((0.8, 0.56, 0.28))      # the muzzle, lighter
+LIP = Vector((0.03, 0.022, 0.02))     # black lips
 MOUTH = Vector((0.1, 0.03, 0.028))    # roof of the mouth, in shadow
 GUM = Vector((0.32, 0.07, 0.06))
 TONGUE = Vector((0.62, 0.16, 0.16))
@@ -268,7 +417,7 @@ for v in me.vertices:
         c = TONGUE if k == 2 else (GUM if k == 1 else MOUTH)
         col.data[v.index].color = (*c, 1)
         continue
-    head, tail = w.get('head', 0), w.get('tail', 0)
+    head, tail = w.get('head', 0) + (w.get('jaw', 0) if k == 0 else 0), w.get('tail', 0)
     feet = w.get('fpaw', 0) + w.get('hpaw', 0) + w.get('pastern', 0) * 0.6 + w.get('hock', 0) * 0.5
     up, down, back = n.z, -n.z, -n.x
     length = 0.4                                                          # body coat: lying flat
@@ -300,8 +449,11 @@ for v in me.vertices:
         u = (p.x - x0) / (x1 - x0)                        # 0 at the back edge, 1 at the front
         drop = ear_top[k] - p.z
         outer = smooth(-0.3, 0.6, abs(n.y))
-        length = 0.32 + 0.3 * smooth(0.02, 0.12, drop) + 0.35 * smooth(0.55, 0.0, u) * smooth(0.02, 0.1, drop)
-        length *= 0.75 + 0.25 * outer
+        # Feathered round the edges, longest on the back edge and the tip, so the ear's outline is soft and runs
+        # into the ruff behind it rather than standing as a flat paddle.
+        length = (0.36 + 0.22 * smooth(0.02, 0.12, drop) + 0.3 * smooth(0.4, 0.0, u) * smooth(0.0, 0.07, drop)
+                  + 0.12 * smooth(0.75, 1.0, u) * smooth(0.04, 0.1, drop) + 0.12 * smooth(0.09, 0.13, drop))
+        length *= 0.8 + 0.2 * outer
     elif k == 1:
         length = 0.06 + 0.2 * smooth(0.4, 0.95, down) * (1 - smooth(0.42, 0.46, p.x))
     else:
@@ -310,7 +462,10 @@ for v in me.vertices:
         throat = head * smooth(0.3, 0.8, down) * (1 - smooth(0.38, 0.42, p.x))
         hl = face * (0.045 - 0.03 * smooth(0.45, 0.48, p.x)) + 0.1 * skull + 0.35 * throat
         hl += 0.18 * skull * smooth(0.36, 0.3, p.x) * smooth(0.6, 0.0, up)        # cheeks into the neck
+        hl += 0.3 * skull * smooth(0.34, 0.29, p.x) * smooth(0.2, 0.7, abs(n.y))    # a ruff round the ears' set
         length = length * (1 - head) + hl
+    lip = me.attributes['lip'].data[v.index].value
+    length *= 1 - lip
     fur.data[v.index].value = max(0.0, min(1.0, length))
 
     c = GOLD.copy()
@@ -322,12 +477,13 @@ for v in me.vertices:
     c = c.lerp(CREAM, 0.12 * lower_leg + 0.2 * min(1, feet))               # legs and feet a shade lighter
     c = c.lerp(PALE, 0.55 * head * smooth(0.385, 0.45, p.x))               # muzzle
     if k in EAR_BONE:
-        c = c.lerp(LEATHER, 0.3 * (1 - smooth(0.4, 0.75, length)))        # leather darker, its fringe lighter
+        c = c.lerp(LEATHER, 0.2 * (1 - smooth(0.4, 0.75, length)))        # leather darker, its fringe lighter
         c = c.lerp(CREAM, 0.3 * smooth(0.5, 0.85, length))
+    c = c.lerp(LIP, max(lip, 0.85 * smooth(0.3, 0.6, w.get('jaw', 0))) if k == 0 else lip)   # lips and the mouth's corners
     col.data[v.index].color = (*c, 1)
 
-me.attributes.remove(me.attributes['part'])
-me.attributes.remove(me.attributes['mouth'])
+for n in ('part', 'mouth', 'lip'):
+    me.attributes.remove(me.attributes[n])
 
 
 # Posing.
@@ -487,7 +643,27 @@ def walk_leg(kind, side, t, vary=1.0):
     place_leg(kind, side, toe, aC, aD)
 
 
+def drive_helpers():
+    """Turn each knee-cap half as far as its second thigh (both have the same rest, so their local turns compare);
+    move each flank bone from where the hips would carry the stifle to where the stifle is."""
+    for name, like in HALF.items():
+        pose[name].rotation_quaternion = Quaternion().slerp(pose[like].rotation_quaternion, 0.5)
+    bpy.context.view_layer.update()
+    hips = pose['hips'].matrix @ rig.data.bones['hips'].matrix_local.inverted()      # rest -> as the hips carry it
+    for name, like in FOLLOW.items():
+        knee_rest = rig.data.bones[like].head_local
+        carried = hips @ knee_rest
+        m = hips @ rig.data.bones[name].matrix_local
+        # (in the hips' frame: the knee's way forward and up, and the skin pushed ahead of it bulging out a little
+        # rather than folding in)
+        d = hips.to_3x3().inverted() @ (pose[like].head - carried)
+        d = Vector((d.x, d.y + BULGE * max(0.0, d.x) * (1 if name.endswith('L') else -1), d.z * FOLLOW_UP))
+        m.translation = m.translation + hips.to_3x3() @ d
+        pose[name].matrix = m
+
+
 def key_all(frame):
+    drive_helpers()
     for pb in pose:
         pb.keyframe_insert('rotation_quaternion', frame=frame)
         pb.keyframe_insert('location', frame=frame)
@@ -576,23 +752,28 @@ for frame in range(WALK_FRAMES + 1):
     key_all(frame)
 
 # Sniff: reaching forward and down to the ground (or the water's edge) with the nose leading, the front end dropping a
-# little as the elbows give, searching slowly side to side; the nose works in two bursts of quick sniffs a loop, the
-# head pushing in a touch for each burst and lifting a little between them.
+# little as the elbows give, searching slowly side to side, the nose working in a burst of quick sniffs; then the head
+# comes up and looks round, one way and the other, and goes back down. The head is carried only moderately steep while
+# down (the neck does the reaching).
 new_action('Sniff')
 for frame in range(SNIFF_FRAMES + 1):
     ph = frame / SNIFF_FRAMES
     reset()
-    burst = smooth(0.0, 0.08, ph % 0.5) * (1 - smooth(0.3, 0.4, ph % 0.5))
-    sniffs = burst * math.sin(15 * TAU * ph)
+    up = smooth(0.5, 0.62, ph) * (1 - smooth(0.86, 0.99, ph))          # head up between bursts
+    burst = smooth(0.02, 0.1, ph) * (1 - smooth(0.4, 0.5, ph))
+    sniffs = burst * math.sin(14 * TAU * ph)
     search = math.sin(TAU * ph)
-    hips_shift((0, 0, -0.006))
-    turn('spine', SIDE, 3)
-    turn('chest', SIDE, 7 + 1.0 * burst)
+    look = math.sin(TAU * smooth(0.56, 0.9, ph))                        # one way, then the other
+    hips_shift((0, 0, -0.006 * (1 - up)))
+    turn('spine', SIDE, 3 * (1 - up))
+    turn('chest', SIDE, (7 + 1.0 * burst) * (1 - up))
     bpy.context.view_layer.update()
-    aim('neck', 76 - 4 * burst, 9 * search)
-    aim('head', 45 + 1.6 * sniffs - 3 * burst, 5 * math.sin(TAU * ph - 0.8))
+    aim('neck', (SNIFF_NECK - 4 * burst) * (1 - up) + 118 * up, 9 * search * (1 - up) + 16 * look * up)
+    aim('head', (SNIFF_HEAD + 1.6 * sniffs - 3 * burst) * (1 - up) + 94 * up,
+        5 * math.sin(TAU * ph - 0.8) * (1 - up) + 14 * look * up)
+    turn('head', FWD, 6 * look * up, pose['head'].rotation_quaternion)
     mouth(0)
-    ears(-4 + 2 * sniffs, 2 * search)
+    ears((-4 + 2 * sniffs) * (1 - up) + 3 * up, 2 * search * (1 - up))
     tail_pose([4, -12, -28, -44], lambda i: (6 + 2 * i) * math.sin(2 * TAU * ph - 0.8 * i))
     stand_legs()
     key_all(frame)

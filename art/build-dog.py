@@ -102,17 +102,23 @@ for s in (-1, 1):
     y = 0.068 * s
     capsule((0.14, 0.055 * s, 0.5), (0.215, 0.07 * s, 0.4), 0.05)       # shoulder blade / point of shoulder
     capsule((0.215, 0.07 * s, 0.4), (0.145, y, 0.31), 0.043)            # upper arm to elbow
-    capsule((0.145, y, 0.3), (0.152, y, 0.1), 0.028)                     # forearm
-    capsule((0.152, y, 0.1), (0.17, y, 0.04), 0.023)                     # pastern
-    ball((0.188, y, 0.024), (0.044, 0.035, 0.024))                       # foot
+    tapered((0.145, y, 0.3), (0.151, y, 0.115), 0.03, 0.022)             # forearm, slimming to the wrist
+    ball((0.153, y, 0.098), (0.024, 0.025, 0.021))                       # carpus (wrist): a knob
+    ball((0.137, y, 0.09), (0.011, 0.012, 0.012))                        # accessory carpal pad behind it
+    tapered((0.155, y, 0.085), (0.17, y, 0.04), 0.018, 0.02)             # pastern, slim, sloping
+    ball((0.178, y, 0.022), (0.026, 0.022, 0.018))                       # (the foot's core: the foot itself is below)
     # Hindlegs: broad muscular thigh, well-bent stifle, second thigh, hock well let down, short upright rear pastern.
     y = 0.075 * s
     ball((-0.215, y, 0.39), (0.075, 0.045, 0.115), rot=Vector((0, 0, -1)).rotation_difference(Vector((0.36, 0, -1)).normalized()))
     capsule((-0.22, y, 0.45), (-0.165, y, 0.29), 0.052)                # femur
     capsule((-0.165, y, 0.29), (-0.295, y, 0.135), 0.033)              # second thigh down to the hock
-    capsule((-0.225, y, 0.33), (-0.3, y, 0.15), 0.03)                  # its back: hamstring and Achilles to the hock
-    capsule((-0.3, y, 0.13), (-0.29, y, 0.04), 0.021)                   # rear pastern
-    ball((-0.27, y, 0.024), (0.043, 0.034, 0.024))                      # foot
+    capsule((-0.225, y, 0.33), (-0.3, y, 0.155), 0.028)                # its back: hamstring and Achilles to the hock
+    ball((-0.312, y, 0.142), (0.016, 0.016, 0.021))                     # point of the hock, standing out behind
+    tapered((-0.298, y, 0.125), (-0.288, y, 0.04), 0.019, 0.018)        # rear pastern, short and lean
+    ball((-0.275, y, 0.022), (0.026, 0.022, 0.018))                     # (the foot's core)
+    # The skin web from the front of the stifle to the belly (the flank fold), so the thigh doesn't crease into the
+    # flank when it swings forward.
+    ball((-0.125, 0.07 * s, 0.355), (0.045, 0.04, 0.05))
 # Tail: set on as an extension of the croup, hanging in a gentle curve to about the hock.
 capsule((-0.32, 0, 0.51), (-0.38, 0, 0.45), 0.029)
 capsule((-0.38, 0, 0.45), (-0.41, 0, 0.36), 0.023)
@@ -169,13 +175,24 @@ def skin(name, build, voxel=0.0085, smooth=8):
     return ob
 
 
+# The lower lip's margin (head-relative, before HEAD): from the corner of the mouth to the chin along the top outer edge
+# of each side of the jaw. rig-dog.py paints along it (black lip, the gum inside it).
+LOWER_LIP = ((0.38, 0.039, 0.653), (0.418, 0.032, 0.648), (0.452, 0.017, 0.642))
+LIP_R = 0.0068
+
+
 def jaw():
-    # Lower jaw: the two sides of the mandible from the hinge under the cheek to the chin, the lower lips along them;
-    # its top sits up inside the upper muzzle while the mouth is shut. The tongue lies in it.
+    # Lower jaw: each side of the mandible from the hinge under the cheek to the chin, deep at the back and slimming to
+    # the chin, its underside rounded; the lower lip rolled along its top outer edge, standing a little proud of the
+    # side so there's a fold under it; the floor of the mouth between, low enough for the tongue to lie in. Its top
+    # sits up inside the upper muzzle while the mouth is shut.
     for s in (-1, 1):
-        capsule(hd(0.35, 0.034 * s, 0.66), hd(0.44, 0.018 * s, 0.643), 0.016)
-    capsule(hd(0.385, 0, 0.645), hd(0.446, 0, 0.641), 0.02)
-    ball(hd(0.45, 0, 0.641), (0.017, 0.023, 0.016))                    # chin
+        tapered(hd(0.352, 0.025 * s, 0.643), hd(0.442, 0.012 * s, 0.632), 0.0125, 0.0095, n=4)
+        ball(hd(0.37, 0.024 * s, 0.635), (0.03, 0.011, 0.012))             # the mandible's rounded lower border
+        for a, b in zip(LOWER_LIP, LOWER_LIP[1:]):
+            capsule(hd(a[0], a[1] * s, a[2]), hd(b[0], b[1] * s, b[2]), LIP_R, stiff=2.6)
+    capsule(hd(0.385, 0, 0.632), hd(0.446, 0, 0.63), 0.013)              # the floor of the mouth
+    ball(hd(0.452, 0, 0.632), (0.015, 0.019, 0.013))                  # chin
 
 
 def tongue():
@@ -183,8 +200,24 @@ def tongue():
     ball(hd(0.452, 0, 0.649), (0.014, 0.018, 0.006))
 
 
-skin('Jaw', jaw, voxel=0.006)
+skin('Jaw', jaw, voxel=0.0045, smooth=3)
 skin('Tongue', tongue, voxel=0.004, smooth=4)
+
+
+def foot(cx, y, toes):
+    """A round, compact foot: the mass of the pads behind, four toes in an arc in front, each its own lobe with a
+    groove between it and the next (finer than the body's remesh can hold, so a piece of its own)."""
+    def build():
+        ball((cx - 0.012, y, 0.018), (0.024, 0.025, 0.018))           # the heel pad's mass, low behind the toes
+        for dx, dy in toes:
+            for s in (-1, 1):
+                ball((cx + dx, y + dy * s, 0.0165), (0.0155, 0.0096, 0.0165))   # a toe: its knuckle stands up
+    return build
+
+
+for s, side in ((1, 'L'), (-1, 'R')):
+    skin(f'Foot.F{side}', foot(0.188, 0.068 * s, ((0.017, 0.0085), (0.009, 0.0245))), voxel=0.0035, smooth=2)
+    skin(f'Foot.H{side}', foot(-0.272, 0.075 * s, ((0.016, 0.008), (0.008, 0.023))), voxel=0.0035, smooth=2)
 
 
 # Ears: drop ears set level with the top of the eye and a little behind it, hanging flat against the cheek to just below
@@ -256,7 +289,7 @@ nose.scale = (0.72, 1.1, 0.76)
 
 # Paws on z=0.
 bpy.context.view_layer.update()
-low = min(v.co.z for v in body.data.vertices)
+low = min(v.co.z for o in scene.objects if o.name == 'Dog' or o.name.startswith('Foot') for v in o.data.vertices)
 for o in scene.objects:
     o.location.z -= low
 for o in scene.objects:

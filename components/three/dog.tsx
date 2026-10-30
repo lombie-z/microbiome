@@ -36,6 +36,16 @@ const DROOP = 0.9;
 const STRETCH = 7;
 const CELL = 230;
 const SHORT = 0.45;
+// Strands drawn at least this many pixels apart (coarser in steps of two when the dog is far or the fur edge-on).
+const LOD_PX = 0.5;
+// The low sun behind the dog lights its fur from behind: a thin warm glow at the silhouette, in the fur's tips (how
+// strong, how tight to the silhouette, the colour the light comes through in). The coat itself stays deep gold, so it
+// holds its shape against the bright mist. SUN_DIR as components/three/landing.ts.
+const RIM = 3.5;
+const RIM_POWER = 1.0;
+const RIM_PX = 3;
+const RIM_COLOUR = '1.0, 0.6, 0.24';
+const SUN_DIR = 'normalize(vec3(0.7, 0.12, -0.7))';
 const glsl = (x: number) => x.toFixed(4);
 const SCALE = 1.95;
 // Where it goes, on the lake (three's x, z; art/build-landing.py at() picks them off the landing view's pixels). The
@@ -144,6 +154,10 @@ function furMaterial(shell: number) {
           // the full length (a flat coat), thinning to a point at the tip.
           vec3 c = normalize(vComb);
           vec3 q = (vRest - c * dot(vRest, c) * ${glsl(1 - 1 / STRETCH)}) * ${glsl(CELL)};
+          // Far off (or where the shells are seen edge-on) a strand is far thinner than a pixel, and strands that thin
+          // only speckle: the strands are drawn coarser there, in steps of two, so each stays a pixel or two across.
+          float perPixel = length(fwidth(q)) / ${glsl(LOD_PX)};
+          q /= exp2(max(0.0, ceil(log2(max(perPixel, 1e-4)))));
           vec3 cell = floor(q);
           float r = furHash(cell);
           float r2 = furHash(cell + 17.3);
@@ -160,6 +174,28 @@ function furMaterial(shell: number) {
           tone = mix(0.62, 1.0, sqrt(uShell)) * (0.92 + 0.16 * r2) * (1.0 + 0.22 * uShell * uShell * vFur);
         }
         diffuseColor.rgb *= tone;`
+      )
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        {
+          // With the low sun behind (as components/three/landing.ts rims the frog and the reeds), the coat glows at
+          // its edges where the light comes through the fur: most in the outer shells (the tips), the long feathering
+          // more, brightest on the sun's side.
+          vec3 nV = normalize(vNormal);
+          vec3 nW = normalize((vec4(nV, 0.0) * viewMatrix).xyz);
+          float facing = abs(dot(nV, normalize(vViewPosition)));
+          float fur = max(vFur, 0.0) * step(0.0, vFur);
+          // (a band a set number of pixels wide at the silhouette, whatever the distance or the pixel size: the
+          // site's chunky pixels are each several centimetres of dog, so a band fixed on the dog would never show)
+          float band = clamp(${glsl(RIM_PX)} * fwidth(facing), 0.08, 0.55);
+          float rim = pow(1.0 - min(facing / band, 1.0), ${glsl(RIM_POWER)});
+          float sunSide = 0.3 + 0.7 * smoothstep(-0.5, 0.6, dot(nW, ${SUN_DIR}));
+          float scatter = rim * mix(0.3, 1.0, uShell) * (0.6 + 0.8 * fur) * sunSide * step(0.0, vFur);
+          // (Light through the tips comes out paler than the coat itself: gold going to cream.)
+          vec3 glow = mix(diffuseColor.rgb * vec3(1.25, 1.0, 0.6), vec3(${RIM_COLOUR}), 0.45);
+          totalEmissiveRadiance += glow * scatter * ${glsl(RIM)};
+        }`
       );
   };
   m.customProgramCacheKey = () => 'dog-fur';
